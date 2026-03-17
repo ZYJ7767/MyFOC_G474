@@ -1,0 +1,14 @@
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Source\CommonTables\CommonTables.c
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Source\CommonTables\arm_common_tables.c
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Include\arm_math.h
+myfoc_g474\commontables.o: ../Drivers/CMSIS/Include/cmsis_compiler.h
+myfoc_g474\commontables.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+myfoc_g474\commontables.o: ../Drivers/CMSIS/Include/cmsis_armcc.h
+myfoc_g474\commontables.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+myfoc_g474\commontables.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
+myfoc_g474\commontables.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\float.h
+myfoc_g474\commontables.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\limits.h
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Include\arm_common_tables.h
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Source\CommonTables\arm_const_structs.c
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Include\arm_const_structs.h
+myfoc_g474\commontables.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Source\CommonTables\arm_mve_tables.c
