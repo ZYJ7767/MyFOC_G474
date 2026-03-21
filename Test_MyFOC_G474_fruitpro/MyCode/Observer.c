@@ -5,11 +5,11 @@ LPF1_t g_smo_ealpha_lpf = {0};
 LPF1_t g_smo_ebeta_lpf  = {0};
 
 StepMotor Mo            = {0.1175, 0.000181, 0.00f, 0.00f, 0.00f};                           //电阻Rs=0.223025 电感Ls = 0.000444463H
-SlidingModeObserver SMO = {0.93714, 0.5349, 3, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
-PLL_Handle PLL          = {353.5, 6.25, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
+SlidingModeObserver SMO = {0.93714, 0.5349, 8, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
+PLL_Handle PLL          = { 177.6, 1.58, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
 
 /**************** IF->SMO 结构体****************/
-ThetaBlend_t Blend      = {0.85f, 20, 1000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
+ThetaBlend_t Blend      = {0.85f, 100, 50000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
 
 
 /****************▲▲ 反电动势法 （数学法） 基波模型 ▲▲****************/
@@ -107,7 +107,7 @@ void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
     if (PLL->Est_we < -2500.0f) PLL->Est_we = -2500.0f;
     
 
-    PLL->Est_RPM = PLL->Est_we * 0.7958f;                                //1.194f   8对极   2.387f   4duiji
+    PLL->Est_RPM = PLL->Est_we * 1.194f;                                //1.194f   8对极   2.387f   4duiji
 //    MyFoc.speed = PLL->Est_RPM;                                                   //及时将观测速度传给foc结构体
     
     PLL->Est_theta += PLL->Est_we * PLL->Ts;
@@ -178,8 +178,25 @@ float IF_SMO_Blend(ThetaBlend_t *blend, float if_theta, float smo_theta, uint16_
 }
 
 
+/**************** ▲▲相位补偿▲▲ ****************/
+float SMO_GetPhaseComp(float mech_rpm)
+{
+    float rpm = fabsf(mech_rpm);
+    float add = 0.0f;
 
+    // 低速不补偿
+    if (rpm <= 700.0f) return 0.0f;
 
+    // 线性补偿
+    // 1000rpm约0.2，1800rpm约0.6
+    add = -0.30f + 0.0005f * rpm;
+
+    // 限幅，防止过补偿
+    if (add < 0.0f)  add = 0.0f;
+    if (add > 0.65f) add = 0.65f;
+
+    return add;
+}
 
 
 

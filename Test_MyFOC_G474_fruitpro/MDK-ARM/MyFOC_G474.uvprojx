@@ -554,6 +554,11 @@
               <FilePath>..\MyCode\Led_Key.c</FilePath>
             </File>
             <File>
+              <FileName>dwt_timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\MyCode\dwt_timer.c</FilePath>
+            </File>
+            <File>
               <FileName>Filter.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\MyCode\Filter.c</FilePath>

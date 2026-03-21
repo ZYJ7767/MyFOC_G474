@@ -42,6 +42,7 @@ myfoc_g474\main.o: ../MyCode/Foc_Function.h
 myfoc_g474\main.o: ../MyCode/Observer.h
 myfoc_g474\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 myfoc_g474\main.o: ../MyCode/Filter.h
+myfoc_g474\main.o: ../MyCode/dwt_timer.h
 myfoc_g474\main.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Include\arm_math.h
 myfoc_g474\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 myfoc_g474\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\float.h

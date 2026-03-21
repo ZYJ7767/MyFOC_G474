@@ -24,7 +24,7 @@ float My_limit(float *limit, float limit_max, float limit_min)
 float Normalize_theta(float theta)
 {
     float a;
-    a = fmod(theta,2*pi);   //取余运算
+    a = fmodf(theta,2*pi);   //取余运算
     
     return a>0?a:(a+2*pi);
 }
@@ -41,16 +41,16 @@ void Clarke(FOC_TypeDef *Foc)
 //▲park变换
 void Park(FOC_TypeDef *Foc , float theta)
 {
-    Foc->Id =  Foc->Ialpha * cos(theta) + Foc->Ibeta * sin(theta);
-    Foc->Iq = -Foc->Ialpha * sin(theta) + Foc->Ibeta * cos(theta);
+    Foc->Id =  Foc->Ialpha * cosf(theta) + Foc->Ibeta * sinf(theta);
+    Foc->Iq = -Foc->Ialpha * sinf(theta) + Foc->Ibeta * cosf(theta);
 }
 
 
 //▲invpark变换
 void Invpark(FOC_TypeDef *Foc , float theta)
 {
-    Foc->Ualpha = Foc->Ud * cos(theta) - Foc->Uq * sin(theta);
-    Foc->Ubeta  = Foc->Ud * sin(theta) + Foc->Uq * cos(theta);
+    Foc->Ualpha = Foc->Ud * cosf(theta) - Foc->Uq * sinf(theta);
+    Foc->Ubeta  = Foc->Ud * sinf(theta) + Foc->Uq * cosf(theta);
 }
 
 
@@ -207,6 +207,7 @@ void SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV,
     PI->Iq_ref = Iq_ref;
     PI->Id_ref = 0;
     
+    
     Clarke(Foc);
     Park(Foc,theta);
     CurrentPI(Foc,PI);
@@ -244,8 +245,8 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI)
 {
 
     float ud_pi, uq_pi;
-    float ud_ff, uq_ff = 0;
-    float we;
+//    float ud_ff, uq_ff = 0;
+//    float we;
     
     //1.dq轴计算偏差
     PI->err_Id = PI->Id_ref - Foc->Id;
@@ -255,10 +256,10 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI)
     PI->Id_KI_sum += PI->err_Id;
     PI->Iq_KI_sum += PI->err_Iq;
     
-    if (PI->Id_KI_sum > 100)  PI->Id_KI_sum =  100;
-    if (PI->Id_KI_sum < -100) PI->Id_KI_sum = -100;
-    if (PI->Iq_KI_sum > 150)  PI->Iq_KI_sum =  150;
-    if (PI->Iq_KI_sum < -150) PI->Iq_KI_sum = -150;
+    if (PI->Id_KI_sum > 430)  PI->Id_KI_sum =  430;
+    if (PI->Id_KI_sum < -430) PI->Id_KI_sum = -430;
+    if (PI->Iq_KI_sum > 1000)  PI->Iq_KI_sum =  1000;
+    if (PI->Iq_KI_sum < -1000) PI->Iq_KI_sum = -1000;
     
     //3.计算PI输出值，Ud和Uq, 并限幅
     ud_pi =(PI->Kp * PI->err_Id) + (PI->Ki * PI->Id_KI_sum);
@@ -290,8 +291,8 @@ void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI, float *Iqref)
     //2.累计积分，并限幅
     PI->speed_KI_sum += PI->err_speed;
     
-    if (PI->speed_KI_sum >  20000.0f) PI->speed_KI_sum =  20000.0f;
-    if (PI->speed_KI_sum < -20000.0f) PI->speed_KI_sum = -20000.0f;
+    if (PI->speed_KI_sum >  60000.0f) PI->speed_KI_sum =  60000.0f;
+    if (PI->speed_KI_sum < -60000.0f) PI->speed_KI_sum = -60000.0f;
     
     //3.计算PI输出值Iqref，作为电流环输入
     Iq_final=(PI->Kp * PI->err_speed) + (PI->Ki * PI->speed_KI_sum);

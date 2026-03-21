@@ -20,7 +20,7 @@
 
 #define TS              3500     //定时器的ARR值
 #define Udc             24
-#define Pn              12        //极对数
+#define Pn              8        //极对数
 #define Ld_H            0.000155f   // 先用你现有值
 #define Lq_H            0.000206f   // 先用同值，不确定时先这样
 #define PSI_F           0.007f      // Wb

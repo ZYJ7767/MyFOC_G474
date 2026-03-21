@@ -29,6 +29,7 @@
 #include "Foc_Function.h"
 #include "Observer.h"
 #include "Filter.h"
+#include "dwt_timer.h"
 #include "math.h"
 #include "arm_math.h"
 /* USER CODE END Includes */
@@ -77,7 +78,8 @@ uint16_t W_Offset    = 0;
 
 uint8_t key;                        //按键值
 float   my_theta      = 0;          //开环位置
-float   my_step       = 0.02;       //开环增量
+float   my_step       = 0.006;       //开环增量
+float   my_add        = 0.0f;
 
 uint16_t EncodeValue    = 0;        //编码器当前值
 float   encode_e_theta  = 0;        //真实电角度
@@ -106,17 +108,19 @@ float    Ibeta;
 float    Vup        = 0;            //VF开环频率（速度）变量
 float    Uup        = 0;            //VF开环电压变量
 
-float    kp         = 0.725f;       //电流环PID调试变量0.725    
-float    ki         = 0.0707f;      //电流环PID调试变量.0707  
+float    kp         = 0.2172f;       //电流环PID调试变量0.725    
+float    ki         = 0.0141f;      //电流环PID调试变量.0707  
 float    skp        = 0.008f;       //速度环PID调试变量
-float    ski        = 0.00055f;     //速度环PID调试变量
+float    ski        = 0.00022f;      //速度环PID调试变量
 
-float    Iqref_start= 6.0f;         //IF-SMO切换电流环
-float    Iqref      = 6.0f;         //Iq
-float    Speedref   = 600.0f;
-float    Speedref_cmd   = 0.0f;
+float    Iqref_start= 4.0f;         //IF-SMO切换电流环
+float    Iqref      = 4.0f;         //Iq
+float    Speedref   = 300.0f;
 
+
+//功能结构体
 LPF1_t g_smo_speed_lpf  = {0};
+DWT_Time_t t = {0};
 
 
 /* USER CODE END PV */
@@ -166,6 +170,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+  DWT_Timer_Init();
   
   /******* 关闭所有led灯 *******/
   LED0(1);
@@ -302,16 +307,21 @@ void SystemClock_Config(void)
 /*▲▲▲ADC三相电流低端采样完成中断 FOC运算 10kHz▲▲▲ */
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                //10kHz频率 0.0001s算一次
 {
-    //static uint8_t  Still_Flag = 0;                                             //拉到0位标志
-    //static uint16_t Still_cnt = 0;                                              //拉到0位计时
-    //static uint8_t  err_cnt    = 0;                                             //记录观测角度可接受误差的次数
-    //static uint8_t  close_flag = 0;                                             //可以切入闭环标志位
+    DWT_Timer_Start(&t);
+     
+
+    
     static uint8_t  offset_cnt   = 0;                                           //偏置测量计数
     static uint16_t openloop_cnt = 0;                                           //开环计时
+    static uint16_t smo_settle_cnt = 0;                                         // 进入SMO_ONLY后稳定计数
+    static uint8_t  speed_loop_en  = 0;                                         // 速度环使能标志
+    static uint8_t  speed_cnt      = 0;                                         // 速度环分频计数（10kHz->1kHz）
+    static float    speedref_cmd   = 0.0f;                                      // 速度给定斜坡
     
     UNUSED(hadc);
     if(hadc == &hadc1)
     {
+
         if(Offset_Flag == 0)
         {
             offset_cnt++;
@@ -347,74 +357,112 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
      }
      if(Run_Flag)
      {
-         static uint8_t  speed_div_cnt   = 0;
-         static uint16_t smo_only_cnt    = 0;
-         static uint8_t  speed_loop_en   = 0;
-         
-         if(Run_Switch == 0)
-         {
-         /******* ▲自定义角度 IF强拖启动 *******/
+
+        if (Run_Switch == 0)
+        {
+            
+            // 1) IF开环角度推进
             my_theta += my_step;
             my_theta  = Normalize_theta(my_theta);
 
+            // 2) IF/SMO加权融合角度
             final_theta = IF_SMO_Blend(&Blend, my_theta, smo_pll_e_theta, openloop_cnt);
 
-            if (Blend.state == BLEND_STATE_SMO_ONLY)
+            if (Blend.state != BLEND_STATE_SMO_ONLY)
             {
+                // 仍在IF阶段（含CONVERGING/BLENDING）：只跑电流环，给固定Iqref_start
+                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start, final_theta);
+                openloop_cnt++;
+
+                // 离开SMO_ONLY后，速度环状态全部清零，避免脏状态
+                speed_loop_en     = 0;
+                smo_settle_cnt    = 0;
+                speed_cnt         = 0;
+                speedref_cmd      = 0.0f;
+                S_PI.speed_KI_sum = 0.0f;
+                Iqref             = Iqref_start;
+            }
+            else
+            {
+                // 已进入SMO_ONLY
                 if (speed_loop_en == 0)
                 {
-                    SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start, final_theta);
+                    // 3) 先仅SMO+电流环稳定一段时间
+                    SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start, Normalize_theta(final_theta + my_add));
 
-                    smo_only_cnt++;
-
-                    if (smo_only_cnt >= 0) //
+                    // 锁相误差满足门限才累计，防止“时间到但没锁稳”就开速度环
+                    if (fabsf(PLL.Err) < 0.6f)
                     {
-                        speed_loop_en      = 1;
-                        speed_div_cnt      = 0;
-                        S_PI.speed_KI_sum  = 0.0f;
-                        Iqref              = Iqref_start;
-                        Speedref_cmd       = MyFoc.speed;
+                        smo_settle_cnt++;
+                    }
+                    else
+                    {
+                        smo_settle_cnt = 0;
+                    }
+
+                    // 1200个10kHz周期 = 120ms
+                    if (smo_settle_cnt >= 1200)
+                    {
+                        // 4) 切入速度环，做无扰预置
+                        speed_loop_en = 1;
+                        speed_cnt     = 0;
+
+                        speedref_cmd   = MyFoc.speed;      // 从当前速度起步
+                        S_PI.speed_ref = speedref_cmd;
+                        S_PI.err_speed = S_PI.speed_ref - MyFoc.speed;
+
+                        // bumpless: 让速度环输出初值接近Iqref_start
+                        if (S_PI.Ki > 1e-6f)
+                        {
+                            S_PI.speed_KI_sum = (Iqref_start - S_PI.Kp * S_PI.err_speed) / S_PI.Ki;
+                        }
+                        else
+                        {
+                            S_PI.speed_KI_sum = 0.0f;
+                        }
+
+                        // 防止预置过大
+                        if (S_PI.speed_KI_sum >  12000.0f) S_PI.speed_KI_sum =  12000.0f;
+                        if (S_PI.speed_KI_sum < -12000.0f) S_PI.speed_KI_sum = -12000.0f;
+
+                        Iqref = Iqref_start;
                     }
                 }
                 else
                 {
-                    speed_div_cnt++;
+                    // 5) 速度环分频执行（10kHz -> 1kHz）
+                    speed_cnt++;
+                    if (speed_cnt >= 10)
+                    {
+                        speed_cnt = 0;
 
-                    if (speed_div_cnt >= 10)
-                    {
-                        speed_div_cnt = 0;
-                        
-                    if (Speedref_cmd < Speedref)
-                    {
-                        Speedref_cmd += 3.0f;
-                        if (Speedref_cmd > Speedref) Speedref_cmd = Speedref;
-                    }
-                    else if (Speedref_cmd > Speedref)
-                    {
-                        Speedref_cmd -= 3.0f;
-                        if (Speedref_cmd < Speedref) Speedref_cmd = Speedref;
-                    }
-                        
-                        S_PI.speed_ref = Speedref_cmd;
+                        // 速度给定斜坡，避免给定跳变（2rpm / 1ms）
+                        if (speedref_cmd < Speedref)
+                        {
+                            speedref_cmd += 0.5f;
+                            if (speedref_cmd > Speedref) speedref_cmd = Speedref;
+                        }
+                        else if (speedref_cmd > Speedref)
+                        {
+                            speedref_cmd -= 0.5f;
+                            if (speedref_cmd < Speedref) speedref_cmd = Speedref;
+                        }
+
+                        S_PI.speed_ref = speedref_cmd;
                         SpeedPI(&MyFoc, &S_PI, &Iqref);
                     }
-
-                    SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, final_theta );
+                    // 6) SMO角度下执行电流环，Iqref由速度环给出
+                    SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, Normalize_theta(final_theta + my_add));
                 }
             }
-            else
-            {
-                speed_loop_en     = 0;
-                speed_div_cnt     = 0;
-                smo_only_cnt      = 0;
-                S_PI.speed_KI_sum = 0.0f;
-                Iqref             = Iqref_start;
-                Speedref_cmd      = 0.0f;
+            
+//            /******* IF强拖角度推进 *******/
+//            my_theta += my_step;
+//            my_theta  = Normalize_theta(my_theta);
 
-                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start, final_theta);
-                openloop_cnt++;
-            }
-        
+//            /******* IF/SMO角度融合 *******/
+//            final_theta = IF_SMO_Blend(&Blend, my_theta, smo_pll_e_theta, openloop_cnt);
+
 //            if(Blend.state == BLEND_STATE_SMO_ONLY)
 //            {
 //            /******* SMO 无感驱动 *******/
@@ -426,18 +474,15 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
 //                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, final_theta);
 //                openloop_cnt++;
 //            }
-            
-            
-         }
+        }
      }
-     
-     
      //保持观测
      smo_pll_e_theta = SMO_PLL_Update(&SMO, &PLL, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
      smo_speed_raw   = (float)PLL.Est_RPM;                                                                         //Jlink调试
      smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.02f);
      MyFoc.speed     = smo_speed;
-     
+//     my_add          = SMO_GetPhaseComp(smo_speed);
+
 
 //        smo_e_theta     = SMO_Update(&SMO, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta); //+ 0.25f;
 //        IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, my_theta);
@@ -455,6 +500,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
     Iq      = MyFoc.Iq;
     Ialpha  = MyFoc.Ialpha;
     Ibeta   = MyFoc.Ibeta; 
+    
+    DWT_Timer_Stop(&t);
 
 }//ADC采样完成中断
 

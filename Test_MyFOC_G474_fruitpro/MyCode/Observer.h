@@ -96,8 +96,8 @@ typedef enum {
 } BlendState_t;
 
 typedef struct {
-    float        threshold;          // rad
-    uint16_t     hold_cnt_max;       // N cycles
+    float        threshold;          // 容许误差rad
+    uint16_t     hold_cnt_max;       // 在容许误差保持的计数
     uint16_t     openloop_cnt_min;   // IF min cycles
     uint16_t     blend_steps;        // 融合段细分步数
     uint16_t     hold_cnt;
@@ -110,7 +110,7 @@ typedef struct {
 extern ThetaBlend_t Blend;
 
 float IF_SMO_Blend(ThetaBlend_t *blend, float if_theta, float smo_theta, uint16_t openloop_cnt);
-
+float SMO_GetPhaseComp(float mech_rpm);  //相位补偿
 
 #endif
 
