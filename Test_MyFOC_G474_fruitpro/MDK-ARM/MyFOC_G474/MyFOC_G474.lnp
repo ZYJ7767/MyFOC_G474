@@ -32,7 +32,7 @@
 "myfoc_g474\dwt_timer.o"
 "myfoc_g474\filter.o"
 "myfoc_g474\readme.o"
-"..\..\..\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Lib\ARM\arm_cortexM4lf_math.lib"
+"C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Lib\ARM\arm_cortexM4lf_math.lib"
 --library_type=microlib --strict --scatter "MyFOC_G474\MyFOC_G474.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

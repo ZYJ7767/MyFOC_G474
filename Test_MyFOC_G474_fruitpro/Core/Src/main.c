@@ -76,9 +76,13 @@ uint16_t U_Offset    = 0;           //偏置ADC值
 uint16_t V_Offset    = 0;
 uint16_t W_Offset    = 0;
 
+#define OC_TRIP_A   15.0f          // 电流保护
+volatile uint8_t g_fault_oc = 0;   // 过流闩锁，触发后保持故障态
+
+
 uint8_t key;                        //按键值
 float   my_theta      = 0;          //开环位置
-float   my_step       = 0.006;       //开环增量
+float   my_step       = 0.006f;       //开环增量
 float   my_add        = 0.0f;
 
 uint16_t EncodeValue    = 0;        //编码器当前值
@@ -115,9 +119,9 @@ float    ski        = 0.00022f;      //速度环PID调试变量
 
 float    Iqref_start= 4.0f;         //IF-SMO切换电流环
 float    Iqref      = 4.0f;         //Iq
-float    Speedref   = 300.0f;
+float    Speedref   = 500.0f;
 
-
+float SMO_K =5.0f;
 //功能结构体
 LPF1_t g_smo_speed_lpf  = {0};
 DWT_Time_t t = {0};
@@ -212,6 +216,8 @@ int main(void)
       S_PI.Kp     = skp;
       S_PI.Ki     = ski;
 
+      
+      SMO.K = SMO_K;
     /***** 软件触发电源电压采集 *****/
       HAL_ADC_Start(&hadc1);
       ADC_Vbus   = HAL_ADC_GetValue(&hadc1);
@@ -307,16 +313,19 @@ void SystemClock_Config(void)
 /*▲▲▲ADC三相电流低端采样完成中断 FOC运算 10kHz▲▲▲ */
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                //10kHz频率 0.0001s算一次
 {
-    DWT_Timer_Start(&t);
-     
 
-    
+    DWT_Timer_Start(&t);
     static uint8_t  offset_cnt   = 0;                                           //偏置测量计数
     static uint16_t openloop_cnt = 0;                                           //开环计时
     static uint16_t smo_settle_cnt = 0;                                         // 进入SMO_ONLY后稳定计数
     static uint8_t  speed_loop_en  = 0;                                         // 速度环使能标志
     static uint8_t  speed_cnt      = 0;                                         // 速度环分频计数（10kHz->1kHz）
     static float    speedref_cmd   = 0.0f;                                      // 速度给定斜坡
+    
+    smo_pll_e_theta = SMO_PLL_Update(&SMO, &PLL, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
+    smo_speed_raw   = (float)PLL.Est_RPM;                                                                         //Jlink调试
+    smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.02f);
+    MyFoc.speed     = smo_speed;
     
     UNUSED(hadc);
     if(hadc == &hadc1)
@@ -353,6 +362,20 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
             IsensV = - (float)(ADC_IsensV - V_Offset)* 0.00785664f;
             IsensW = - (float)(ADC_IsensW - W_Offset)* 0.00785664f;
             
+            if ((fabsf(IsensU) > OC_TRIP_A) ||(fabsf(IsensV) > OC_TRIP_A) ||(fabsf(IsensW) > OC_TRIP_A))
+            {
+                g_fault_oc = 1;
+            }
+            if (g_fault_oc)
+            {
+                Motor_SoftwareTrip_StopAll();
+                speedref_cmd   = 0.0f; // 把中断里的静态参考也归零
+                speed_loop_en  = 0;
+                speed_cnt      = 0;
+                smo_settle_cnt = 0;
+                openloop_cnt   = 0;
+                return;
+            }
         }
      }
      if(Run_Flag)
@@ -367,6 +390,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
 
             // 2) IF/SMO加权融合角度
             final_theta = IF_SMO_Blend(&Blend, my_theta, smo_pll_e_theta, openloop_cnt);
+//            final_theta = my_theta;
 
             if (Blend.state != BLEND_STATE_SMO_ONLY)
             {
@@ -439,12 +463,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                         // 速度给定斜坡，避免给定跳变（2rpm / 1ms）
                         if (speedref_cmd < Speedref)
                         {
-                            speedref_cmd += 0.5f;
+                            speedref_cmd += 1.0f;
                             if (speedref_cmd > Speedref) speedref_cmd = Speedref;
                         }
                         else if (speedref_cmd > Speedref)
                         {
-                            speedref_cmd -= 0.5f;
+                            speedref_cmd -= 1.0f;
                             if (speedref_cmd < Speedref) speedref_cmd = Speedref;
                         }
 
@@ -476,21 +500,11 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
 //            }
         }
      }
-     //保持观测
-     smo_pll_e_theta = SMO_PLL_Update(&SMO, &PLL, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
-     smo_speed_raw   = (float)PLL.Est_RPM;                                                                         //Jlink调试
-     smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.02f);
-     MyFoc.speed     = smo_speed;
+     //保持观测   
+    DWT_Timer_Stop(&t);
+
 //     my_add          = SMO_GetPhaseComp(smo_speed);
 
-
-//        smo_e_theta     = SMO_Update(&SMO, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta); //+ 0.25f;
-//        IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, my_theta);
-//        smo_e_theta = SMO_Observer(&SMO, &Mo, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
-//        EncodeValue = __HAL_TIM_GET_COUNTER(&htim3);                                     
-//        encode_e_theta = Encode_get_e_theta(EncodeValue);                                
-//        CurrentLoop_Encode(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, encode_e_theta);
-     
     //jlink调试
     Ud      = MyFoc.Ud;
     Uq      = MyFoc.Uq;
@@ -501,7 +515,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
     Ialpha  = MyFoc.Ialpha;
     Ibeta   = MyFoc.Ibeta; 
     
-    DWT_Timer_Stop(&t);
+
 
 }//ADC采样完成中断
 
@@ -553,6 +567,39 @@ float LowPassFilter(float input , float a)                                      
     prev_output = output;
     return output;
 }
+
+
+ void Motor_SoftwareTrip_StopAll(void)
+{
+    // 关PWM主输出
+//    __HAL_TIM_MOE_DISABLE(&htim1);
+
+    // 双保险：停各通道
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_3);
+    HAL_TIMEx_PWMN_Stop(&htim1, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Stop(&htim1, TIM_CHANNEL_2);
+    HAL_TIMEx_PWMN_Stop(&htim1, TIM_CHANNEL_3);
+
+    // 参考值清零
+    Iqref    = 0.0f;
+    Speedref = 0.0f;
+    my_step  = 0.0f;
+
+    C_PI.Id_ref = 0.0f;
+    C_PI.Iq_ref = 0.0f;
+    S_PI.speed_ref = 0.0f;
+
+    // 积分清零
+    C_PI.Id_KI_sum = 0.0f;
+    C_PI.Iq_KI_sum = 0.0f;
+    S_PI.speed_KI_sum = 0.0f;
+}
+
+
+
+
 
 /* USER CODE END 4 */
 

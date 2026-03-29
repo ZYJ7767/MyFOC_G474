@@ -36,3 +36,7 @@ myfoc_g474\foc_function.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_pwr
 myfoc_g474\foc_function.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_pwr_ex.h
 myfoc_g474\foc_function.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim.h
 myfoc_g474\foc_function.o: ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h
+myfoc_g474\foc_function.o: C:\Users\86185\AppData\Local\Arm\Packs\ARM\CMSIS\5.7.0\CMSIS\DSP\Include\arm_math.h
+myfoc_g474\foc_function.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+myfoc_g474\foc_function.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\float.h
+myfoc_g474\foc_function.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\limits.h

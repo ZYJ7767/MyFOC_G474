@@ -1,15 +1,19 @@
 #include "Observer.h"
 #include "Filter.h"
+#include "arm_math.h"
+
 
 LPF1_t g_smo_ealpha_lpf = {0};
 LPF1_t g_smo_ebeta_lpf  = {0};
 
 StepMotor Mo            = {0.1175, 0.000181, 0.00f, 0.00f, 0.00f};                           //电阻Rs=0.223025 电感Ls = 0.000444463H
-SlidingModeObserver SMO = {0.93714, 0.5349, 8, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
-PLL_Handle PLL          = { 177.6, 1.58, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
+SlidingModeObserver SMO = {0.93714, 0.5349, 5.0, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
+PLL_Handle PLL          = { 88.9f, 0.395f, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
 
 /**************** IF->SMO 结构体****************/
 ThetaBlend_t Blend      = {0.85f, 100, 50000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
+
+
 
 
 /****************▲▲ 反电动势法 （数学法） 基波模型 ▲▲****************/
@@ -39,6 +43,18 @@ float sign(float x)
     return 0.0f;
 }
 
+float sat(float x)
+{
+    if (x > 0.5f)  return 1.0f;
+    if (x < -0.5f) return -1.0f;
+    return x / 0.5f;   // 边界层内线性
+}
+
+float sigmoid(float x)
+{
+    return tanhf(3.0f * x);
+}
+
 /*****▲更新滑膜观测器 *****/
 float SMO_Update(SlidingModeObserver *smo,float u_alpha, float u_beta, float i_alpha, float i_beta) 
 {
@@ -64,13 +80,13 @@ float SMO_Update(SlidingModeObserver *smo,float u_alpha, float u_beta, float i_a
 float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, float u_beta, float i_alpha, float i_beta) 
 {
     // 更新alpha轴
-    smo->E_alpha = smo->K * sign(smo->est_ialpha - i_alpha);
-    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.65f);//LowPassFilter(smo->E_alpha ,0.65);
+    smo->E_alpha = smo->K * sat(smo->est_ialpha - i_alpha);
+    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.45f);//LowPassFilter(smo->E_alpha ,0.65);
     smo->est_ialpha = smo->A * smo->est_ialpha + smo->B * (u_alpha - smo->E_alpha);
 
     // 更新beta轴
-    smo->E_beta  = smo->K * sign(smo->est_ibeta - i_beta);
-    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.65f);//LowPassFilter(smo->E_beta  ,0.65);
+    smo->E_beta  = smo->K * sat(smo->est_ibeta - i_beta);
+    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.45f);//LowPassFilter(smo->E_beta  ,0.65);
     smo->est_ibeta = smo->A * smo->est_ibeta + smo->B * (u_beta - smo->E_beta);
     
     // PLL锁定角度
@@ -83,13 +99,12 @@ float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, f
 /**************** ▲▲ PLL锁相环计算函数 ▲▲ ****************/ 
 void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
 {
-    float sin_value = 0.0f;
-    float cos_value = 0.0f;
+    float SinValue = 0.0f;
+    float CosValue = 0.0f;
     
-    sin_value = sinf(PLL->Est_theta);
-    cos_value = cosf(PLL->Est_theta);
+    arm_sin_cos_f32(PLL->Est_theta * RAD_TO_DEG, &SinValue, &CosValue);
     
-    PLL->Err = -Ealpha *cos_value - Ebeta *sin_value;
+    PLL->Err = -Ealpha *CosValue - Ebeta *SinValue;
     
     
     PLL->Err = (PLL->Err > 0.5236f)  ?  (0.5236f) : (PLL->Err);                   //当Δθ小于pi/6时，认为sin（Δθ）= Δθ
@@ -107,7 +122,7 @@ void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
     if (PLL->Est_we < -2500.0f) PLL->Est_we = -2500.0f;
     
 
-    PLL->Est_RPM = PLL->Est_we * 1.194f;                                //1.194f   8对极   2.387f   4duiji
+    PLL->Est_RPM = PLL->Est_we * 2.387f;                                //1.194f   8对极   2.387f   4duiji
 //    MyFoc.speed = PLL->Est_RPM;                                                   //及时将观测速度传给foc结构体
     
     PLL->Est_theta += PLL->Est_we * PLL->Ts;

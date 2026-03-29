@@ -81,6 +81,8 @@ extern PLL_Handle PLL;
 uint16_t BEF_calculate(FOC_TypeDef *Foc,StepMotor *SteoMotor);
 
 float sign(float x);                                                                                                            //符号函数
+float sat(float x);
+float sigmoid(float x);
 void  PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta);                                                                //PLL函数
 
 float SMO_Update(SlidingModeObserver *smo, float u_alpha, float u_beta, float i_alpha, float i_beta);                           //SMO atan

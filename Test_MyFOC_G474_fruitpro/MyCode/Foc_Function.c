@@ -2,6 +2,7 @@
 #include "math.h"
 #include "stdint.h"
 #include "tim.h"
+#include "arm_math.h"
 
 
 FOC_TypeDef        MyFoc = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -23,10 +24,23 @@ float My_limit(float *limit, float limit_max, float limit_min)
 //▲归一化函数  将角度限制在0到2pi之间
 float Normalize_theta(float theta)
 {
-    float a;
-    a = fmodf(theta,2*pi);   //取余运算
-    
-    return a>0?a:(a+2*pi);
+
+    const float TwoPi = 6.283185307f;
+
+    if (theta >= TwoPi)
+    {
+        theta -= TwoPi;
+    }
+    else if (theta < 0.0f)
+    {
+        theta += TwoPi;
+    }
+    return theta;
+
+//    float a;
+//    a = fmodf(theta,2*pi);   //取余运算
+//    
+//    return a>0?a:(a+2*pi);
 }
 
 
@@ -41,16 +55,25 @@ void Clarke(FOC_TypeDef *Foc)
 //▲park变换
 void Park(FOC_TypeDef *Foc , float theta)
 {
-    Foc->Id =  Foc->Ialpha * cosf(theta) + Foc->Ibeta * sinf(theta);
-    Foc->Iq = -Foc->Ialpha * sinf(theta) + Foc->Ibeta * cosf(theta);
+    float SinValue = 0.0f;
+    float CosValue = 0.0f;
+    arm_sin_cos_f32(theta * RAD_TO_DEG, &SinValue, &CosValue);
+    
+    Foc->Id =  Foc->Ialpha * CosValue + Foc->Ibeta * SinValue;
+    Foc->Iq = -Foc->Ialpha * SinValue + Foc->Ibeta * CosValue;
 }
 
 
 //▲invpark变换
 void Invpark(FOC_TypeDef *Foc , float theta)
 {
-    Foc->Ualpha = Foc->Ud * cosf(theta) - Foc->Uq * sinf(theta);
-    Foc->Ubeta  = Foc->Ud * sinf(theta) + Foc->Uq * cosf(theta);
+    float SinValue = 0.0f;
+    float CosValue = 0.0f;
+
+    arm_sin_cos_f32(theta * RAD_TO_DEG, &SinValue, &CosValue);
+
+    Foc->Ualpha = Foc->Ud * CosValue - Foc->Uq * SinValue;
+    Foc->Ubeta  = Foc->Ud * SinValue + Foc->Uq * CosValue;
 }
 
 
@@ -167,50 +190,50 @@ void VF_OpenLoop(FOC_TypeDef *Foc, float Ud, float Uq, float theta)
 }
 
 //▲IF开环综合函数       (也是电流环，只是角度自定义)
-void IF_OpenLoop(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta)
+void IF_OpenLoop(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
     Foc->Iv = IV;
     Foc->Iw = IW;
-    PI->Iq_ref = Iq_ref;
+    PI_ctrl->Iq_ref = Iq_ref;
     
     Clarke(Foc);
     Park(Foc,theta);
-    CurrentPI(Foc,PI);
+    CurrentPI(Foc,PI_ctrl);
     Invpark(Foc,theta);
     Svpwm(Foc);
 }
 
 
 //▲电流环（编码器） 闭环综合函数
-void CurrentLoop_Encode(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta)
+void CurrentLoop_Encode(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
     Foc->Iv = IV;
     Foc->Iw = IW;
-    PI->Iq_ref = Iq_ref;
+    PI_ctrl->Iq_ref = Iq_ref;
     
     Clarke(Foc);
     Park(Foc,theta);
-    CurrentPI(Foc,PI);
+    CurrentPI(Foc,PI_ctrl);
     Invpark(Foc,theta);
     Svpwm(Foc);
 }
 
 
 //▲SMO滑膜观测器 电流环 综合函数
-void SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta)
+void SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
     Foc->Iv = IV;
     Foc->Iw = IW;
-    PI->Iq_ref = Iq_ref;
-    PI->Id_ref = 0;
+    PI_ctrl->Iq_ref = Iq_ref;
+    PI_ctrl->Id_ref = 0;
     
     
     Clarke(Foc);
     Park(Foc,theta);
-    CurrentPI(Foc,PI);
+    CurrentPI(Foc,PI_ctrl);
     Invpark(Foc,theta);
     Svpwm(Foc);
 }
@@ -241,7 +264,7 @@ void SMO_S_C_Control(FOC_TypeDef *Foc,PI_SPEED_TypeDef *S_PI, PI_CURRENT_TypeDef
 /***************▲▲PID控制器功能函数▲▲*****************/
 
 //(1)▲电流环PID控制器
-void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI)
+void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
 {
 
     float ud_pi, uq_pi;
@@ -249,21 +272,21 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI)
 //    float we;
     
     //1.dq轴计算偏差
-    PI->err_Id = PI->Id_ref - Foc->Id;
-    PI->err_Iq = PI->Iq_ref - Foc->Iq;
+    PI_ctrl->err_Id = PI_ctrl->Id_ref - Foc->Id;
+    PI_ctrl->err_Iq = PI_ctrl->Iq_ref - Foc->Iq;
     
     //2.累计积分，并限幅
-    PI->Id_KI_sum += PI->err_Id;
-    PI->Iq_KI_sum += PI->err_Iq;
+    PI_ctrl->Id_KI_sum += PI_ctrl->err_Id;
+    PI_ctrl->Iq_KI_sum += PI_ctrl->err_Iq;
     
-    if (PI->Id_KI_sum > 430)  PI->Id_KI_sum =  430;
-    if (PI->Id_KI_sum < -430) PI->Id_KI_sum = -430;
-    if (PI->Iq_KI_sum > 1000)  PI->Iq_KI_sum =  1000;
-    if (PI->Iq_KI_sum < -1000) PI->Iq_KI_sum = -1000;
+    if (PI_ctrl->Id_KI_sum > 630)  PI_ctrl->Id_KI_sum =  630;
+    if (PI_ctrl->Id_KI_sum < -630) PI_ctrl->Id_KI_sum = -630;
+    if (PI_ctrl->Iq_KI_sum > 800)  PI_ctrl->Iq_KI_sum =  800;
+    if (PI_ctrl->Iq_KI_sum < -800) PI_ctrl->Iq_KI_sum = -800;
     
     //3.计算PI输出值，Ud和Uq, 并限幅
-    ud_pi =(PI->Kp * PI->err_Id) + (PI->Ki * PI->Id_KI_sum);
-    uq_pi =(PI->Kp * PI->err_Iq) + (PI->Ki * PI->Iq_KI_sum);
+    ud_pi =(PI_ctrl->Kp * PI_ctrl->err_Id) + (PI_ctrl->Ki * PI_ctrl->Id_KI_sum);
+    uq_pi =(PI_ctrl->Kp * PI_ctrl->err_Iq) + (PI_ctrl->Ki * PI_ctrl->Iq_KI_sum);
     
 //    we = Foc->speed * (2.0f * pi / 60.0f) * Pn;
 //    ud_ff = -we * Lq_H * Foc->Iq;
@@ -281,25 +304,25 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI)
 
 
 //(2)▲速度环PID控制器
-void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI, float *Iqref)
+void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI_ctrl, float *Iqref)
 {
     float Iq_final;
     
     //1.dq轴计算偏差
-    PI->err_speed = PI->speed_ref - Foc->speed;
+    PI_ctrl->err_speed = PI_ctrl->speed_ref - Foc->speed;
     
     //2.累计积分，并限幅
-    PI->speed_KI_sum += PI->err_speed;
+    PI_ctrl->speed_KI_sum += PI_ctrl->err_speed;
     
-    if (PI->speed_KI_sum >  60000.0f) PI->speed_KI_sum =  60000.0f;
-    if (PI->speed_KI_sum < -60000.0f) PI->speed_KI_sum = -60000.0f;
+    if (PI_ctrl->speed_KI_sum >  60000.0f) PI_ctrl->speed_KI_sum =  60000.0f;
+    if (PI_ctrl->speed_KI_sum < -60000.0f) PI_ctrl->speed_KI_sum = -60000.0f;
     
     //3.计算PI输出值Iqref，作为电流环输入
-    Iq_final=(PI->Kp * PI->err_speed) + (PI->Ki * PI->speed_KI_sum);
+    Iq_final=(PI_ctrl->Kp * PI_ctrl->err_speed) + (PI_ctrl->Ki * PI_ctrl->speed_KI_sum);
 
     //4.输出限幅
-    if (Iq_final > 12.0f)  Iq_final =  12.0f;
-    if (Iq_final < -1.0f)  Iq_final = -1.0f;
+    if (Iq_final > 8.0f)  Iq_final =  8.0f;
+    if (Iq_final < 0.0f)  Iq_final = 0.0f;
     
     (*Iqref) = Iq_final;
 }
@@ -307,15 +330,9 @@ void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI, float *Iqref)
 
 /***************▲▲其他控制策略函数▲▲*****************/
 //▲MTPA控制函数
-void MTPA_Calculate(MTPA_TypeDef *MTPA , PI_CURRENT_TypeDef *PI)
+void MTPA_Calculate(MTPA_TypeDef *MTPA , PI_CURRENT_TypeDef *PI_ctrl)
 {
-    float delta_L = MTPA->Ld - MTPA->Lq;
-    
-    if(delta_L <=0.0001f|| delta_L >=-0.0001f)
-    {
-        
-    }
-    
+
 }
 
 

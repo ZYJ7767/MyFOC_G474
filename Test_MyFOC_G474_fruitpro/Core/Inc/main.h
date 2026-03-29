@@ -46,7 +46,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+extern float SMO_K;
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 float LowPassFilter(float input,float a);
+void Motor_SoftwareTrip_StopAll(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
