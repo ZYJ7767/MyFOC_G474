@@ -8,8 +8,8 @@ LPF1_t g_smo_ebeta_lpf  = {0};
 
 StepMotor Mo            = {0.1175, 0.000181, 0.00f, 0.00f, 0.00f};                           //电阻Rs=0.223025 电感Ls = 0.000444463H
 SlidingModeObserver SMO = {0.93714, 0.5349, 5.0, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
-PLL_Handle PLL          = { 88.9f, 0.395f, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
-
+PLL_Handle PLL          = { 888.4f, 39.49f, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
+//88.9f0.395f
 /**************** IF->SMO 结构体****************/
 ThetaBlend_t Blend      = {0.85f, 100, 50000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
 
@@ -81,13 +81,16 @@ float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, f
 {
     // 更新alpha轴
     smo->E_alpha = smo->K * sat(smo->est_ialpha - i_alpha);
-    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.45f);//LowPassFilter(smo->E_alpha ,0.65);
-    smo->est_ialpha = smo->A * smo->est_ialpha + smo->B * (u_alpha - smo->E_alpha);
+    smo->est_ialpha = smo->A * smo->est_ialpha + smo->B * (u_alpha - smo->E_alpha);    
+    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.65f);//LowPassFilter(smo->E_alpha ,0.65);
+    
+
 
     // 更新beta轴
     smo->E_beta  = smo->K * sat(smo->est_ibeta - i_beta);
-    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.45f);//LowPassFilter(smo->E_beta  ,0.65);
-    smo->est_ibeta = smo->A * smo->est_ibeta + smo->B * (u_beta - smo->E_beta);
+    smo->est_ibeta = smo->A * smo->est_ibeta + smo->B * (u_beta - smo->E_beta);    
+    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.65f);//LowPassFilter(smo->E_beta  ,0.65);
+
     
     // PLL锁定角度
     PLL_calculate(PLL, smo->E_alpha, smo->E_beta );
@@ -101,11 +104,13 @@ void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
 {
     float SinValue = 0.0f;
     float CosValue = 0.0f;
+    float Em_Mag   = 0.0f;  // [新增] 用于存储反电动势幅值
     
     arm_sin_cos_f32(PLL->Est_theta * RAD_TO_DEG, &SinValue, &CosValue);
     
     PLL->Err = -Ealpha *CosValue - Ebeta *SinValue;
-    
+    Em_Mag = sqrtf(Ealpha * Ealpha + Ebeta * Ebeta);
+    PLL->Err = PLL->Err / (Em_Mag + 0.001f);
     
     PLL->Err = (PLL->Err > 0.5236f)  ?  (0.5236f) : (PLL->Err);                   //当Δθ小于pi/6时，认为sin（Δθ）= Δθ
     PLL->Err = (PLL->Err < -0.5236f) ? (-0.5236f) : (PLL->Err);

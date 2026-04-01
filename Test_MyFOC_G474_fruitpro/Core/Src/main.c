@@ -112,16 +112,16 @@ float    Ibeta;
 float    Vup        = 0;            //VF开环频率（速度）变量
 float    Uup        = 0;            //VF开环电压变量
 
-float    kp         = 0.2172f;       //电流环PID调试变量0.725    
-float    ki         = 0.0141f;      //电流环PID调试变量.0707  
+float    kp         = 0.2274f;      //电流环PID调试变量 200Hz带宽
+float    ki         = 0.0148f;      //电流环PID调试变量
 float    skp        = 0.008f;       //速度环PID调试变量
-float    ski        = 0.00022f;      //速度环PID调试变量
+float    ski        = 0.00022f;     //速度环PID调试变量
 
 float    Iqref_start= 4.0f;         //IF-SMO切换电流环
 float    Iqref      = 4.0f;         //Iq
-float    Speedref   = 500.0f;
+float    Speedref   = 400.0f;
 
-float SMO_K =5.0f;
+float SMO_K =3.0f;
 //功能结构体
 LPF1_t g_smo_speed_lpf  = {0};
 DWT_Time_t t = {0};
@@ -216,8 +216,6 @@ int main(void)
       S_PI.Kp     = skp;
       S_PI.Ki     = ski;
 
-      
-      SMO.K = SMO_K;
     /***** 软件触发电源电压采集 *****/
       HAL_ADC_Start(&hadc1);
       ADC_Vbus   = HAL_ADC_GetValue(&hadc1);
@@ -324,8 +322,13 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
     
     smo_pll_e_theta = SMO_PLL_Update(&SMO, &PLL, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
     smo_speed_raw   = (float)PLL.Est_RPM;                                                                         //Jlink调试
-    smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.02f);
+    smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.015f);
     MyFoc.speed     = smo_speed;
+    
+    SMO_K = 0.0082f * smo_speed + 0.2133f;                                      //动态滑膜增益
+    if(SMO_K < 1.5f)  SMO_K = 1.5f;
+    else if(SMO_K > 15.0f) SMO_K = 15.0f;
+    SMO.K = SMO_K;
     
     UNUSED(hadc);
     if(hadc == &hadc1)
