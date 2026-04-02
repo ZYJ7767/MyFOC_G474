@@ -97,6 +97,22 @@ typedef struct
 
 }PI_SPEED_TypeDef;
 
+
+//▲谐振抑制结构体
+typedef struct {
+    float Kr;          // 谐振增益 (调节抵消力度)
+    float Wc;          // 谐振带宽 (rad/s，建议10~30)
+    
+    // 历史状态变量 (代码内部使用，不用管)
+    float x_prev1;
+    float x_prev2; 
+    float y_prev1;
+    float y_prev2; 
+} Resonant_Handle;
+
+
+
+
 //▲MTPA用到电机参数结构体
 typedef struct
 {
@@ -109,7 +125,8 @@ typedef struct
 }MTPA_TypeDef;
 
 
-
+extern Resonant_Handle    PR_Id;
+extern Resonant_Handle    PR_Iq;
 extern FOC_TypeDef        MyFoc;
 extern PI_CURRENT_TypeDef C_PI;
 extern PI_SPEED_TypeDef   S_PI;
@@ -137,6 +154,8 @@ void  CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI);
 void  SpeedPI  (FOC_TypeDef *Foc , PI_SPEED_TypeDef   *PI , float *Iqref);
 
 //▲其他控制策略函数
+
+float PR_Update(Resonant_Handle *pr, float x_in, float We_rad, float Ts);
 void  MTPA_Calculate(MTPA_TypeDef *MTPA ,PI_CURRENT_TypeDef *PI);
 
 

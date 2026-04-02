@@ -121,7 +121,8 @@ float    Iqref_start= 4.0f;         //IF-SMO切换电流环
 float    Iqref      = 4.0f;         //Iq
 float    Speedref   = 400.0f;
 
-float SMO_K =3.0f;
+float    SMO_K      = 3.0f;
+float    Kr         = 15.0f;
 //功能结构体
 LPF1_t g_smo_speed_lpf  = {0};
 DWT_Time_t t = {0};
@@ -202,6 +203,8 @@ int main(void)
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_2);  
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_3); 
 
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -215,6 +218,10 @@ int main(void)
       
       S_PI.Kp     = skp;
       S_PI.Ki     = ski;
+      
+
+      PR_Id.Kr = Kr;
+      PR_Iq.Kr = Kr;
 
     /***** 软件触发电源电压采集 *****/
       HAL_ADC_Start(&hadc1);

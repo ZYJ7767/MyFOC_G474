@@ -82,14 +82,14 @@ float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, f
     // 更新alpha轴
     smo->E_alpha = smo->K * sat(smo->est_ialpha - i_alpha);
     smo->est_ialpha = smo->A * smo->est_ialpha + smo->B * (u_alpha - smo->E_alpha);    
-    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.65f);//LowPassFilter(smo->E_alpha ,0.65);
+    smo->E_alpha = LPF1_Update(&g_smo_ealpha_lpf, smo->E_alpha, 0.40f);//LowPassFilter(smo->E_alpha ,0.65);
     
 
 
     // 更新beta轴
     smo->E_beta  = smo->K * sat(smo->est_ibeta - i_beta);
     smo->est_ibeta = smo->A * smo->est_ibeta + smo->B * (u_beta - smo->E_beta);    
-    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.65f);//LowPassFilter(smo->E_beta  ,0.65);
+    smo->E_beta  = LPF1_Update(&g_smo_ebeta_lpf , smo->E_beta , 0.40f);//LowPassFilter(smo->E_beta  ,0.65);
 
     
     // PLL锁定角度

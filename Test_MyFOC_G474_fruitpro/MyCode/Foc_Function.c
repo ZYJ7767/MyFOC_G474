@@ -10,6 +10,9 @@ PI_CURRENT_TypeDef C_PI  = {0,0,0,0,0,0,0,0};
 PI_SPEED_TypeDef   S_PI  = {0,0,0,0,0};
 MTPA_TypeDef       MTPA  = {0.223,0.00044,0.00f,0.000363,0.0005325};
 
+Resonant_Handle    PR_Id = {0, 20, 0, 0, 0, 0};
+Resonant_Handle    PR_Iq = {0, 20, 0, 0, 0, 0};
+
 /***************▲▲FOC功能函数▲▲*****************/
 
 //▲限幅函数
@@ -268,8 +271,8 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
 {
 
     float ud_pi, uq_pi;
-//    float ud_ff, uq_ff = 0;
-//    float we;
+    float ud_ff, uq_ff = 0;
+    float we;
     
     //1.dq轴计算偏差
     PI_ctrl->err_Id = PI_ctrl->Id_ref - Foc->Id;
@@ -288,12 +291,16 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
     ud_pi =(PI_ctrl->Kp * PI_ctrl->err_Id) + (PI_ctrl->Ki * PI_ctrl->Id_KI_sum);
     uq_pi =(PI_ctrl->Kp * PI_ctrl->err_Iq) + (PI_ctrl->Ki * PI_ctrl->Iq_KI_sum);
     
-//    we = Foc->speed * (2.0f * pi / 60.0f) * Pn;
-//    ud_ff = -we * Lq_H * Foc->Iq;
-//    uq_ff =  we * Ld_H * Foc->Id + we * PSI_F;
+    we = Foc->speed * (2.0f * pi / 60.0f) * Pn;
     
-    Foc->Ud = ud_pi; //+ ud_ff;
-    Foc->Uq = uq_pi; //+ uq_ff;
+    ud_ff = -we * Lq_H * PI_ctrl->Iq_ref;
+    uq_ff =  we * Ld_H * PI_ctrl->Id_ref + we * PSI_F;
+    
+    float ud_pr = PR_Update(&PR_Id, PI_ctrl->err_Id, we, 0.0001f);
+    float uq_pr = PR_Update(&PR_Iq, PI_ctrl->err_Iq, we, 0.0001f);
+    
+    Foc->Ud = ud_pi+ ud_ff + ud_pr;
+    Foc->Uq = uq_pi+ uq_ff + uq_pr;
     
     //4.输出限幅
     if (Foc->Ud > 13)   Foc->Ud =  13;
@@ -329,6 +336,51 @@ void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI_ctrl, float *Iqref)
 
 
 /***************▲▲其他控制策略函数▲▲*****************/
+
+// 准谐振控制器 (PR) 核心差分方程
+float PR_Update(Resonant_Handle *pr, float x_in, float We_rad, float Ts)
+{
+    // 1. 锁定目标消除频率：6 倍的电角速度
+    float w0 = 6.0f * fabsf(We_rad); 
+    
+    // 如果电频率太低或速度接近 0，不需要谐振补偿，直接返回0
+    if(w0 < 15.0f || pr->Kr < 0.1f) {
+        return 0.0f; 
+    }
+
+    // 2. Tustin 双线性变换离散化参数计算
+    float w0_sq = w0 * w0;
+    float Ts_sq_inv = 1.0f / (Ts * Ts);
+    float Ts_inv = 1.0f / Ts;
+
+    // 公共分母 temp
+    float temp = 4.0f * Ts_sq_inv + 4.0f * pr->Wc * Ts_inv + w0_sq;
+    
+    // 差分方程系数 b0, b1, b2, a1, a2
+    float b0 =  (4.0f * pr->Kr * pr->Wc * Ts_inv) / temp;
+    float b1 =  0.0f;
+    float b2 = -(4.0f * pr->Kr * pr->Wc * Ts_inv) / temp;
+    
+    float a1 =  (2.0f * w0_sq - 8.0f * Ts_sq_inv) / temp;
+    float a2 =  (4.0f * Ts_sq_inv - 4.0f * pr->Wc * Ts_inv + w0_sq) / temp;
+
+    // 3. 计算输出
+    float y_out = b0 * x_in + b1 * pr->x_prev1 + b2 * pr->x_prev2 
+                  - a1 * pr->y_prev1 - a2 * pr->y_prev2;
+
+    // 4. 更新历史状态
+    pr->x_prev2 = pr->x_prev1;
+    pr->x_prev1 = x_in;
+    pr->y_prev2 = pr->y_prev1;
+    pr->y_prev1 = y_out;
+    
+    if(y_out >  3.0f) y_out =  3.0f;
+    if(y_out < -3.0f) y_out = -3.0f;
+
+    return y_out;
+}
+
+
 //▲MTPA控制函数
 void MTPA_Calculate(MTPA_TypeDef *MTPA , PI_CURRENT_TypeDef *PI_ctrl)
 {

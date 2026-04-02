@@ -120,6 +120,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
+          <Name>d</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -288,6 +289,11 @@
           <count>26</count>
           <WinNumber>1</WinNumber>
           <ItemText>SMO_K</ItemText>
+        </Ww>
+        <Ww>
+          <count>27</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>Kr</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>
