@@ -14,28 +14,35 @@
 */
 uint8_t key_scan(uint8_t mode)
 {
-    static uint8_t key_up = 1;  /* 按键按松开标志 */
+    static uint8_t key_up = 1;       /* 按键按松开标志 */
+    static uint8_t debounce_cnt = 0; /* 任务周期消抖计数器 */
     uint8_t keyval = 0;
 
-    if (mode) key_up = 1;       /* 支持连按 */
-
-    if (key_up && (KEY0 == 0 || KEY1 == 0 || KEY2 == 0))  /* 按键松开标志为1, 且有任意一个按键按下了 */
+    /* 检查是否有键按下 */
+    if (KEY0 == 0 || KEY1 == 0 || KEY2 == 0) 
     {
-        HAL_Delay(10);           /* 去抖动 */
-        key_up = 0;
+        if (key_up) 
+        {
+            debounce_cnt++;
+            if (debounce_cnt >= 2)  /* 相当于 > 10ms 的消抖 */
+            {
+                key_up = 0;
+                debounce_cnt = 0;
 
-        if (KEY0 == 0)  keyval = KEY0_PRES;
-
-        if (KEY1 == 0)  keyval = KEY1_PRES;
-
-        if (KEY2 == 0)  keyval = KEY2_PRES;
+                if (KEY0 == 0)  keyval = KEY0_PRES;
+                else if (KEY1 == 0)  keyval = KEY1_PRES;
+                else if (KEY2 == 0)  keyval = KEY2_PRES;
+            }
+        }
     }
-    else if (KEY0 == 1 && KEY1 == 1 && KEY2 == 1)         /* 没有任何按键按下, 标记按键松开 */
+    else  
     {
+        /* 没有任何按键按下，清空计数器，恢复松开状态 */
+        debounce_cnt = 0;
         key_up = 1;
     }
 
-    return keyval;              /* 返回键值 */
+    return keyval; /* 返回键值 */
 }
 
 

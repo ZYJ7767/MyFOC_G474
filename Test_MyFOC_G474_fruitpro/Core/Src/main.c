@@ -18,7 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
+#include "dma.h"
+#include "spi.h"
 #include "tim.h"
 #include "gpio.h"
 
@@ -76,7 +79,7 @@ uint16_t U_Offset    = 0;           //偏置ADC值
 uint16_t V_Offset    = 0;
 uint16_t W_Offset    = 0;
 
-#define OC_TRIP_A   15.0f          // 电流保护
+#define  OC_TRIP_A   25.0f          // 电流保护
 volatile uint8_t g_fault_oc = 0;   // 过流闩锁，触发后保持故障态
 
 
@@ -114,24 +117,26 @@ float    Uup        = 0;            //VF开环电压变量
 
 float    kp         = 0.2274f;      //电流环PID调试变量 200Hz带宽
 float    ki         = 0.0148f;      //电流环PID调试变量
-float    skp        = 0.008f;       //速度环PID调试变量
-float    ski        = 0.00022f;     //速度环PID调试变量
+float    skp        = 0.016f;       //速度环PID调试变量
+float    ski        = 0.00060f;     //速度环PID调试变量
 
-float    Iqref_start= 4.0f;         //IF-SMO切换电流环
-float    Iqref      = 4.0f;         //Iq
-float    Speedref   = 400.0f;
+float    Iqref_start= 5.0f;         //IF-SMO切换电流环
+float    Iqref      = 5.0f;         //Iq参考
+float    Speedref   = 0.0f;
 
-float    SMO_K      = 3.0f;
-float    Kr         = 15.0f;
-//功能结构体
-LPF1_t g_smo_speed_lpf  = {0};
-DWT_Time_t t = {0};
+float    SMO_K      = 3.0f;         //初始滑膜增益
+float    Kr         = 0.0f;         //谐振增益
+
+
+LPF1_t g_smo_speed_lpf  = {0};      //低通滤波器
+DWT_Time_t t = {0};                 //DWT时间戳
 
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -169,17 +174,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM1_Init();
-  MX_TIM6_Init();
   MX_TIM3_Init();
   MX_TIM7_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   DWT_Timer_Init();
   
   /******* 关闭所有led灯 *******/
   LED0(1);
   LED1(1);
+  
+  /******* 控制器参数赋值 *******/
+  C_PI.Kp  = kp;                                               //wb*Ls = 1000*0.000444463 = 0.444463
+  C_PI.Ki  = ki;                                               //wb*Rs = 1000*0.223025     = 223
+  S_PI.Kp  = skp;
+  S_PI.Ki  = ski;
+
+  PR_Id.Kr = Kr;
+  PR_Iq.Kr = Kr;
+  
   /*********** ADC相电流采集 ***********/
   __HAL_ADC_CLEAR_FLAG( &hadc1, ADC_FLAG_JEOC);                     //在启动新一轮ADC转换前，清除之前的转换结束标志
   __HAL_ADC_CLEAR_FLAG( &hadc1, ADC_FLAG_EOC);                      //End of Conversion标志位
@@ -188,7 +204,7 @@ int main(void)
   HAL_ADCEx_InjectedStart_IT(&hadc1);                               //开启三相电流值ADC采集以及ADC中断
 
   /*********TIM1&6&3 PWM互补输出 触发 定时 编码器**********/
-  HAL_TIM_Base_Start_IT(&htim6);                                    //TIM6 计时
+//  HAL_TIM_Base_Start_IT(&htim6);                                  //TIM6 计时
   
   HAL_TIM_Encoder_Stop(&htim3, TIM_CHANNEL_ALL);                    //TIM3 编码器 先停止
   __HAL_TIM_SET_COUNTER(&htim3, 0);                                 //清0计数器
@@ -203,64 +219,23 @@ int main(void)
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_2);  
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_3); 
 
-
-
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //PI调试
-      C_PI.Kp     = kp;                                               //wb*Ls = 1000*0.000444463 = 0.444463
-      C_PI.Ki     = ki;                                               //wb*Rs = 1000*0.223025     = 223
-//      C_PI.Iq_ref = Iqref;
-      
-      S_PI.Kp     = skp;
-      S_PI.Ki     = ski;
-      
-
-      PR_Id.Kr = Kr;
-      PR_Iq.Kr = Kr;
-
-    /***** 软件触发电源电压采集 *****/
-      HAL_ADC_Start(&hadc1);
-      ADC_Vbus   = HAL_ADC_GetValue(&hadc1);
-      Vbus = (float)ADC_Vbus * 0.0176757477f;
-      
-    /****** KEY_LED 预留模块 ******/
-//      key = key_scan(0);
-//      if (key)
-//      {
-//        switch (key)
-//        {
-//            case KEY0_PRES:
-//                LED0_TOGGLE(); 
-//                Iqref += 0.5f;
-//                if(Iqref >= 10.0f) Iqref = 10.0f;
-//                break;
-
-//            case KEY1_PRES:
-//                LED1_TOGGLE();
-//                Iqref -= 0.5f;
-//                if(Iqref <= -10.0f) Iqref = -10.0f;
-//                break;
-
-//            case KEY2_PRES:
-//                LED0_TOGGLE();
-//                LED1_TOGGLE();
-//                Iqref = 0.0f;
-//                break;
-//            default : break;
-//        }
-//      }
-//      else
-//      {
-//        HAL_Delay(10);
-//      }
-      
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -315,7 +290,7 @@ void SystemClock_Config(void)
 
 /*********************************** 各类中断存放区 主要功能实现 ***********************************/
 
-/*▲▲▲ADC三相电流低端采样完成中断 FOC运算 10kHz▲▲▲ */
+/*ADC三相电流低端采样完成中断 FOC运算 10kHz */
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                //10kHz频率 0.0001s算一次
 {
 
@@ -327,11 +302,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
     static uint8_t  speed_cnt      = 0;                                         // 速度环分频计数（10kHz->1kHz）
     static float    speedref_cmd   = 0.0f;                                      // 速度给定斜坡
     
+    
     smo_pll_e_theta = SMO_PLL_Update(&SMO, &PLL, MyFoc.Ualpha, MyFoc.Ubeta, MyFoc.Ialpha, MyFoc.Ibeta);
     smo_speed_raw   = (float)PLL.Est_RPM;                                                                         //Jlink调试
     smo_speed       = LPF1_Update(&g_smo_speed_lpf, smo_speed_raw, 0.015f);
     MyFoc.speed     = smo_speed;
-    
+    //my_add          = SMO_GetPhaseComp(smo_speed);                              //相位补偿
     SMO_K = 0.0082f * smo_speed + 0.2133f;                                      //动态滑膜增益
     if(SMO_K < 1.5f)  SMO_K = 1.5f;
     else if(SMO_K > 15.0f) SMO_K = 15.0f;
@@ -372,12 +348,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
             IsensV = - (float)(ADC_IsensV - V_Offset)* 0.00785664f;
             IsensW = - (float)(ADC_IsensW - W_Offset)* 0.00785664f;
             
+            //过流保护
             if ((fabsf(IsensU) > OC_TRIP_A) ||(fabsf(IsensV) > OC_TRIP_A) ||(fabsf(IsensW) > OC_TRIP_A))
             {
                 g_fault_oc = 1;
             }
             if (g_fault_oc)
             {
+                Run_Flag = 0;  
                 Motor_SoftwareTrip_StopAll();
                 speedref_cmd   = 0.0f; // 把中断里的静态参考也归零
                 speed_loop_en  = 0;
@@ -386,21 +364,53 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                 openloop_cnt   = 0;
                 return;
             }
+            //电机停机/启动操作
+            if (Speedref == 0.0f && Run_Flag == 1)
+            {
+                Run_Flag = 0;                 // 关闭主运算FOC标志位
+                Motor_SoftwareTrip_StopAll(); // 关闭PWM、清空所有PID积分
+                
+                speed_loop_en  = 0;           // 将运行强拖与斜坡的所有状态清零，以备下次干净的启动
+                speed_cnt      = 0;
+                smo_settle_cnt = 0;
+                openloop_cnt   = 0;
+                speedref_cmd   = 0.0f;
+                my_theta       = 0.0f;
+                Blend.state    = 0;           // 将IF/SMO的融合器拉回从0初始状态
+                return;                       // 本次中断提前结束
+            }
+            else if (Speedref > 0.0f && Run_Flag == 0 && g_fault_oc == 0)
+            {
+                my_step = 0.006f;             //恢复初始步长
+                openloop_cnt   = 0;
+                smo_settle_cnt = 0;
+                speed_loop_en  = 0;
+                my_theta       = 0.0f;
+                speedref_cmd   = 0.0f;
+                MyFoc.speed    = 0.0f;
+                Iqref          = Iqref_start;
+                Blend.state    = 0;
+                
+                HAL_TIM_PWM_Start( &htim1, TIM_CHANNEL_1);// 重启定时器1的6个PWM输出通道
+                HAL_TIM_PWM_Start( &htim1, TIM_CHANNEL_2);
+                HAL_TIM_PWM_Start( &htim1, TIM_CHANNEL_3);
+                HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_1);
+                HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_2);  
+                HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_3); 
+                
+                Run_Flag = 1;                 // 重置运行标志位，放行后续的 IF 开环拖动控制代码
+            }
+            
         }
      }
      if(Run_Flag)
      {
-
-        if (Run_Switch == 0)
-        {
-            
             // 1) IF开环角度推进
             my_theta += my_step;
             my_theta  = Normalize_theta(my_theta);
 
             // 2) IF/SMO加权融合角度
             final_theta = IF_SMO_Blend(&Blend, my_theta, smo_pll_e_theta, openloop_cnt);
-//            final_theta = my_theta;
 
             if (Blend.state != BLEND_STATE_SMO_ONLY)
             {
@@ -424,7 +434,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                     // 3) 先仅SMO+电流环稳定一段时间
                     SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start, Normalize_theta(final_theta + my_add));
 
-                    // 锁相误差满足门限才累计，防止“时间到但没锁稳”就开速度环
+                    // 锁相误差满足门限才累计，防止没锁稳就开速度环
                     if (fabsf(PLL.Err) < 0.6f)
                     {
                         smo_settle_cnt++;
@@ -470,7 +480,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                     {
                         speed_cnt = 0;
 
-                        // 速度给定斜坡，避免给定跳变（2rpm / 1ms）
+                        // 速度给定斜坡，避免给定跳变
                         if (speedref_cmd < Speedref)
                         {
                             speedref_cmd += 1.0f;
@@ -489,31 +499,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                     SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, Normalize_theta(final_theta + my_add));
                 }
             }
-            
-//            /******* IF强拖角度推进 *******/
-//            my_theta += my_step;
-//            my_theta  = Normalize_theta(my_theta);
-
-//            /******* IF/SMO角度融合 *******/
-//            final_theta = IF_SMO_Blend(&Blend, my_theta, smo_pll_e_theta, openloop_cnt);
-
-//            if(Blend.state == BLEND_STATE_SMO_ONLY)
-//            {
-//            /******* SMO 无感驱动 *******/
-//                SMO_C_Control(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, final_theta);
-//            }
-//            else
-//            {
-//            /******* IF 强拖驱动 / IF加权角度强拖驱动 *******/
-//                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref, final_theta);
-//                openloop_cnt++;
-//            }
-        }
      }
-     //保持观测   
+
     DWT_Timer_Stop(&t);
 
-//     my_add          = SMO_GetPhaseComp(smo_speed);
 
     //jlink调试
     Ud      = MyFoc.Ud;
@@ -525,37 +514,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
     Ialpha  = MyFoc.Ialpha;
     Ibeta   = MyFoc.Ibeta; 
     
-
-
 }//ADC采样完成中断
-
-
-/**▲▲▲定时作用 开环斜率 编码器速度计算▲▲▲**/
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)  
-{
-    static uint16_t value = 0;                          //编码器值暂存
-    
-    if (htim->Instance == TIM6)                         // TIM6计时 自增角斜率 5,000Hz 0.2ms算一次
-    {
-//        if(ThetaUp_Flag)  my_theta += 0.03f ;
-//        my_theta = Normalize_theta(my_theta);                                                 //0-2pi
-    }
-    
-    if (htim->Instance == TIM7)                         // TIM7计时 编码器算速度 1,000Hz 1ms算一次
-    {
-        value        = __HAL_TIM_GET_COUNTER(&htim3);
-        encode_speed = Encode_get_speed(value, 10, &encode_cnt);
-    }
-    
-    if (htim->Instance == TIM3)                         // TIM3编码器更新中断  进一次代表转了一圈
-    {
-        encode_cnt ++;
-    }
-    
-    
-}//TIM定时中断
-
-
 
 
 
@@ -578,13 +537,10 @@ float LowPassFilter(float input , float a)                                      
     return output;
 }
 
-
- void Motor_SoftwareTrip_StopAll(void)
+/************** 停机功能函数 **************/ 
+void Motor_SoftwareTrip_StopAll(void)
 {
-    // 关PWM主输出
-//    __HAL_TIM_MOE_DISABLE(&htim1);
-
-    // 双保险：停各通道
+    // 停各通道
     HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_3);
@@ -612,6 +568,27 @@ float LowPassFilter(float input , float a)                                      
 
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

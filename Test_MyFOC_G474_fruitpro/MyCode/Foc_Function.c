@@ -13,9 +13,9 @@ MTPA_TypeDef       MTPA  = {0.223,0.00044,0.00f,0.000363,0.0005325};
 Resonant_Handle    PR_Id = {0, 20, 0, 0, 0, 0};
 Resonant_Handle    PR_Iq = {0, 20, 0, 0, 0, 0};
 
-/***************▲▲FOC功能函数▲▲*****************/
+/***************FOC功能函数*****************/
 
-//▲限幅函数
+//限幅函数
 float My_limit(float *limit, float limit_max, float limit_min)
 {
     if(*limit > limit_max){*limit = limit_max;}
@@ -24,7 +24,7 @@ float My_limit(float *limit, float limit_max, float limit_min)
 }
 
 
-//▲归一化函数  将角度限制在0到2pi之间
+//归一化函数  将角度限制在0到2pi之间
 float Normalize_theta(float theta)
 {
 
@@ -40,14 +40,10 @@ float Normalize_theta(float theta)
     }
     return theta;
 
-//    float a;
-//    a = fmodf(theta,2*pi);   //取余运算
-//    
-//    return a>0?a:(a+2*pi);
 }
 
 
-//▲clarke变换(等幅值)
+//clarke变换(等幅值)
 void Clarke(FOC_TypeDef *Foc)
 {
     Foc->Ialpha = Foc->Iu; // Ia
@@ -55,7 +51,7 @@ void Clarke(FOC_TypeDef *Foc)
 }
 
 
-//▲park变换
+//park变换
 void Park(FOC_TypeDef *Foc , float theta)
 {
     float SinValue = 0.0f;
@@ -67,7 +63,7 @@ void Park(FOC_TypeDef *Foc , float theta)
 }
 
 
-//▲invpark变换
+//invpark变换
 void Invpark(FOC_TypeDef *Foc , float theta)
 {
     float SinValue = 0.0f;
@@ -80,7 +76,7 @@ void Invpark(FOC_TypeDef *Foc , float theta)
 }
 
 
-//▲SVPWM算法
+//SVPWM算法
 void Svpwm(FOC_TypeDef *Foc)
 {
     /****************第一步扇区判断***************/ 
@@ -183,7 +179,7 @@ void Svpwm(FOC_TypeDef *Foc)
         __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, Foc->Tcm3);
 }
 
-//▲VF开环综合函数
+//VF开环综合函数
 void VF_OpenLoop(FOC_TypeDef *Foc, float Ud, float Uq, float theta)
 {
     Foc->Ud = Ud;
@@ -192,7 +188,7 @@ void VF_OpenLoop(FOC_TypeDef *Foc, float Ud, float Uq, float theta)
     Svpwm(Foc);
 }
 
-//▲IF开环综合函数       (也是电流环，只是角度自定义)
+//IF开环综合函数       (可以作为电流环，只是角度自定义)
 void IF_OpenLoop(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
@@ -208,7 +204,7 @@ void IF_OpenLoop(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float 
 }
 
 
-//▲电流环（编码器） 闭环综合函数
+//电流环（编码器） 闭环综合函数
 void CurrentLoop_Encode(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
@@ -224,7 +220,7 @@ void CurrentLoop_Encode(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU,
 }
 
 
-//▲SMO滑膜观测器 电流环 综合函数
+//SMO滑膜观测器 电流环 综合函数
 void SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, float IV, float IW, float Iq_ref, float theta)
 {
     Foc->Iu = IU;
@@ -241,9 +237,11 @@ void SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI_ctrl, float IU, floa
     Svpwm(Foc);
 }
 
-//▲SMO滑膜观测器 速度环电流环 双环综合函数
+//SMO滑膜观测器 速度环电流环 双环综合函数
 void SMO_S_C_Control(FOC_TypeDef *Foc,PI_SPEED_TypeDef *S_PI, PI_CURRENT_TypeDef *C_PI, float IU, float IV, float IW, float Speed_ref, float theta)
 {
+    static uint8_t S_cnt = 0; 
+    
     Foc->Iu = IU;
     Foc->Iv = IV;
     Foc->Iw = IW;
@@ -253,8 +251,12 @@ void SMO_S_C_Control(FOC_TypeDef *Foc,PI_SPEED_TypeDef *S_PI, PI_CURRENT_TypeDef
     
     float Iq_ref;
     
-    S_PI->speed_ref = Speed_ref;
-    SpeedPI(Foc, S_PI, &Iq_ref);
+    S_cnt++;
+    if(S_cnt > 0)
+    {
+        S_PI->speed_ref = Speed_ref;
+        SpeedPI(Foc, S_PI, &Iq_ref);
+    }
     
     C_PI->Iq_ref = Iq_ref;
     C_PI->Id_ref = 0;
@@ -264,9 +266,9 @@ void SMO_S_C_Control(FOC_TypeDef *Foc,PI_SPEED_TypeDef *S_PI, PI_CURRENT_TypeDef
     Svpwm(Foc);
 }
 
-/***************▲▲PID控制器功能函数▲▲*****************/
+/***************PID控制器功能函数*****************/
 
-//(1)▲电流环PID控制器
+//(1)电流环PID控制器
 void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
 {
 
@@ -282,10 +284,10 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
     PI_ctrl->Id_KI_sum += PI_ctrl->err_Id;
     PI_ctrl->Iq_KI_sum += PI_ctrl->err_Iq;
     
-    if (PI_ctrl->Id_KI_sum > 630)  PI_ctrl->Id_KI_sum =  630;
-    if (PI_ctrl->Id_KI_sum < -630) PI_ctrl->Id_KI_sum = -630;
-    if (PI_ctrl->Iq_KI_sum > 800)  PI_ctrl->Iq_KI_sum =  800;
-    if (PI_ctrl->Iq_KI_sum < -800) PI_ctrl->Iq_KI_sum = -800;
+    if (PI_ctrl->Id_KI_sum > 600)  PI_ctrl->Id_KI_sum =  600;
+    if (PI_ctrl->Id_KI_sum < -600) PI_ctrl->Id_KI_sum = -600;
+    if (PI_ctrl->Iq_KI_sum > 1300)  PI_ctrl->Iq_KI_sum =  1300;
+    if (PI_ctrl->Iq_KI_sum < -1300) PI_ctrl->Iq_KI_sum = -1300;
     
     //3.计算PI输出值，Ud和Uq, 并限幅
     ud_pi =(PI_ctrl->Kp * PI_ctrl->err_Id) + (PI_ctrl->Ki * PI_ctrl->Id_KI_sum);
@@ -305,12 +307,12 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
     //4.输出限幅
     if (Foc->Ud > 13)   Foc->Ud =  13;
     if (Foc->Ud < -13)  Foc->Ud = -13;
-    if (Foc->Uq > 13)   Foc->Uq =  13;
-    if (Foc->Uq < -13)  Foc->Uq = -13;
+    if (Foc->Uq > 20)   Foc->Uq =  20;
+    if (Foc->Uq < -20)  Foc->Uq = -20;
 }
 
 
-//(2)▲速度环PID控制器
+//(2)速度环PID控制器
 void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI_ctrl, float *Iqref)
 {
     float Iq_final;
@@ -321,21 +323,21 @@ void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI_ctrl, float *Iqref)
     //2.累计积分，并限幅
     PI_ctrl->speed_KI_sum += PI_ctrl->err_speed;
     
-    if (PI_ctrl->speed_KI_sum >  60000.0f) PI_ctrl->speed_KI_sum =  60000.0f;
-    if (PI_ctrl->speed_KI_sum < -60000.0f) PI_ctrl->speed_KI_sum = -60000.0f;
+    if (PI_ctrl->speed_KI_sum >  40000.0f) PI_ctrl->speed_KI_sum =  40000.0f;
+    if (PI_ctrl->speed_KI_sum < -40000.0f) PI_ctrl->speed_KI_sum = -40000.0f;
     
     //3.计算PI输出值Iqref，作为电流环输入
     Iq_final=(PI_ctrl->Kp * PI_ctrl->err_speed) + (PI_ctrl->Ki * PI_ctrl->speed_KI_sum);
 
     //4.输出限幅
-    if (Iq_final > 8.0f)  Iq_final =  8.0f;
+    if (Iq_final > 23.0f)  Iq_final =  23.0f;
     if (Iq_final < 0.0f)  Iq_final = 0.0f;
     
     (*Iqref) = Iq_final;
 }
 
 
-/***************▲▲其他控制策略函数▲▲*****************/
+/***************其他控制策略函数*****************/
 
 // 准谐振控制器 (PR) 核心差分方程
 float PR_Update(Resonant_Handle *pr, float x_in, float We_rad, float Ts)
@@ -381,10 +383,10 @@ float PR_Update(Resonant_Handle *pr, float x_in, float We_rad, float Ts)
 }
 
 
-//▲MTPA控制函数
+//MTPA控制函数
 void MTPA_Calculate(MTPA_TypeDef *MTPA , PI_CURRENT_TypeDef *PI_ctrl)
 {
-
+    //后续假如查表
 }
 
 

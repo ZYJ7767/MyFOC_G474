@@ -2,11 +2,11 @@
 #define __FOC_H
 
 
-//▲电机参数
+//电机参数
     //硬石科技无刷电机      Rs=0.223025Ω   Ls=0.000444463H    （Lq=1.06543/2mH Ld=0.7124/2mH）
     //直流无刷割草机        Rs=*****Ω     Ls=
 
-//▲宏定义
+//宏定义
 #define  pi             3.1415926535f
 #define _2sqrt3_3       1.1547005383f
 #define _sqrt3_3        0.5773502691f
@@ -21,15 +21,15 @@
 
 
 #define TS              3500     //定时器的ARR值
-#define Udc             24
+#define Udc             36
 #define Pn              4        //极对数
 #define Ld_H            0.000155f   // 先用你现有值
 #define Lq_H            0.000206f   // 先用同值，不确定时先这样
 #define PSI_F           0.007f      // Wb
 
 
-//▲结构体
-//▲FOC控制主结构体
+//结构体
+//FOC控制主结构体
 typedef struct
 {
     float Iu;
@@ -66,7 +66,7 @@ typedef struct
     
 }FOC_TypeDef;
 
-//▲电流PI控制器结构体
+//电流PI控制器结构体
 typedef struct
 {
     float Id_ref;           //d轴电流参考值 (Id=0)
@@ -83,7 +83,7 @@ typedef struct
 
 }PI_CURRENT_TypeDef;
 
-//▲速度PI控制器结构体
+//速度PI控制器结构体
 typedef struct
 {
     float speed_ref;        //参考速度值 RPM
@@ -98,7 +98,7 @@ typedef struct
 }PI_SPEED_TypeDef;
 
 
-//▲谐振抑制结构体
+//谐振抑制结构体
 typedef struct {
     float Kr;          // 谐振增益 (调节抵消力度)
     float Wc;          // 谐振带宽 (rad/s，建议10~30)
@@ -113,7 +113,7 @@ typedef struct {
 
 
 
-//▲MTPA用到电机参数结构体
+//MTPA用到电机参数结构体
 typedef struct
 {
     float Rs ;
@@ -132,9 +132,9 @@ extern PI_CURRENT_TypeDef C_PI;
 extern PI_SPEED_TypeDef   S_PI;
 
 
-/****▲▲函数声明▲▲****/
+/****函数声明****/
 
-//▲FOC过程函数
+//FOC过程函数
 float My_limit(float *limit, float limit_max, float limit_min);
 float Normalize_theta(float theta);
 void  Clarke(FOC_TypeDef *Foc);
@@ -142,19 +142,18 @@ void  Park(FOC_TypeDef *Foc , float theta);
 void  Invpark(FOC_TypeDef *Foc , float theta);
 void  Svpwm(FOC_TypeDef *Foc);
 
-//▲FOC实现综合函数
+//FOC实现综合函数
 void  VF_OpenLoop(FOC_TypeDef *Foc, float Ud, float Uq, float theta);
 void  IF_OpenLoop(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta);
 void  CurrentLoop_Encode(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta);
 void  SMO_C_Control(FOC_TypeDef *Foc, PI_CURRENT_TypeDef *PI, float IU, float IV, float IW, float Iq_ref, float theta);
 void  SMO_S_C_Control(FOC_TypeDef *Foc,PI_SPEED_TypeDef *S_PI, PI_CURRENT_TypeDef *C_PI, float IU, float IV, float IW, float Speed_ref, float theta);
 
-//▲控制器实现函数
+//控制器实现函数
 void  CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI);
 void  SpeedPI  (FOC_TypeDef *Foc , PI_SPEED_TypeDef   *PI , float *Iqref);
 
-//▲其他控制策略函数
-
+//其他控制策略函数
 float PR_Update(Resonant_Handle *pr, float x_in, float We_rad, float Ts);
 void  MTPA_Calculate(MTPA_TypeDef *MTPA ,PI_CURRENT_TypeDef *PI);
 

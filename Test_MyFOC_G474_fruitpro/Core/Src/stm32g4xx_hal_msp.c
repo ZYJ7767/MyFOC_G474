@@ -71,6 +71,13 @@ void HAL_MspInit(void)
   __HAL_RCC_PWR_CLK_ENABLE();
 
   /* System interrupt init*/
+  /* PendSV_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(PendSV_IRQn, 15, 0);
+
+  /* Peripheral interrupt init */
+  /* PVD_PVM_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(PVD_PVM_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(PVD_PVM_IRQn);
 
   /** Disable the internal Pull-Up in Dead Battery pins of UCPD peripheral
   */

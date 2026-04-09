@@ -1,0 +1,13 @@
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
+myfoc_g474\heap_4.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
+myfoc_g474\heap_4.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stddef.h
+myfoc_g474\heap_4.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+myfoc_g474\heap_4.o: ../Core/Inc/FreeRTOSConfig.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/portmacro.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
+myfoc_g474\heap_4.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h

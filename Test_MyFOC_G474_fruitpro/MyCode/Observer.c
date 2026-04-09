@@ -16,7 +16,7 @@ ThetaBlend_t Blend      = {0.85f, 100, 50000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.
 
 
 
-/****************▲▲ 反电动势法 （数学法） 基波模型 ▲▲****************/
+/**************** 反电动势法 （数学法） 基波模型 ****************/
 uint16_t BEF_calculate(FOC_TypeDef *Foc,StepMotor *SteoMotor)
 {
     Foc->PIalpha     = Foc->Ialpha - Foc->Ialpha_prev;
@@ -34,8 +34,8 @@ uint16_t BEF_calculate(FOC_TypeDef *Foc,StepMotor *SteoMotor)
     return theta;
 }
 
-/**************** ▲▲SMO+反正切 滑膜观测器 袁雷离散▲▲ ****************/
-/***** ▲符号函数 *****/
+/**************** SMO+反正切 滑膜观测器 袁雷离散 ****************/
+/***** 符号函数 *****/
 float sign(float x)
 {
     if (x > 0) return 1.0f;
@@ -55,7 +55,7 @@ float sigmoid(float x)
     return tanhf(3.0f * x);
 }
 
-/*****▲更新滑膜观测器 *****/
+/*****更新滑膜观测器 *****/
 float SMO_Update(SlidingModeObserver *smo,float u_alpha, float u_beta, float i_alpha, float i_beta) 
 {
     // 更新alpha轴
@@ -76,7 +76,7 @@ float SMO_Update(SlidingModeObserver *smo,float u_alpha, float u_beta, float i_a
     return e_theta;
 }
 
-/**************** ▲▲SMO+PLL 滑膜观测器 袁雷离散▲▲ ****************/
+/**************** SMO+PLL 滑膜观测器 袁雷离散 ****************/
 float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, float u_beta, float i_alpha, float i_beta) 
 {
     // 更新alpha轴
@@ -99,7 +99,7 @@ float SMO_PLL_Update(SlidingModeObserver *smo, PLL_Handle *PLL, float u_alpha, f
 }
 
 
-/**************** ▲▲ PLL锁相环计算函数 ▲▲ ****************/ 
+/**************** PLL锁相环计算函数 ****************/ 
 void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
 {
     float SinValue = 0.0f;
@@ -137,7 +137,7 @@ void PLL_calculate(PLL_Handle *PLL ,float Ealpha ,float Ebeta)
 
 
 
-/**************** ▲▲IF/SMO 切换判断&加权切换函数▲▲ ****************/
+/**************** IF/SMO 切换判断&加权切换函数 ****************/
 float IF_SMO_Blend(ThetaBlend_t *blend, float if_theta, float smo_theta, uint16_t openloop_cnt)
 {
     /* diff = smo - if, wrapped to (-pi, pi] via shortest arc.
@@ -198,25 +198,41 @@ float IF_SMO_Blend(ThetaBlend_t *blend, float if_theta, float smo_theta, uint16_
 }
 
 
-/**************** ▲▲相位补偿▲▲ ****************/
+/**************** 相位补偿 ****************/
 float SMO_GetPhaseComp(float mech_rpm)
 {
-    float rpm = fabsf(mech_rpm);
-    float add = 0.0f;
+    // 总相位补偿 = 电角速度 * 等效延时（SMO + LPF + 计算延迟）
+    // 先给一个保守值，后续可微调
+    const float Td_eq_s  = 180e-6f;   // 建议起始 140e-6 ~ 260e-6
+    const float rpm_ramp = 500.0f;    // 低速渐入，避免低速抖
+    const float comp_max = 0.35f;     // 最大约20度(0.35rad)
+    const float lpf_a    = 0.05f;     // 补偿量平滑，防止抖动
 
-    // 低速不补偿
-    if (rpm <= 700.0f) return 0.0f;
+    float sign = (mech_rpm >= 0.0f) ? 1.0f : -1.0f;
+    float rpm  = fabsf(mech_rpm);
 
-    // 线性补偿
-    // 1000rpm约0.2，1800rpm约0.6
-    add = -0.30f + 0.0005f * rpm;
+    // 电角速度(rad/s): we = wm * pole_pairs
+    float we = rpm * (2.0f * pi / 60.0f) * Pn;
 
-    // 限幅，防止过补偿
-    if (add < 0.0f)  add = 0.0f;
-    if (add > 0.65f) add = 0.65f;
+    // 线性相位超前（弧度）
+    float comp = we * Td_eq_s;
 
-    return add;
+    // 低速按比例渐入
+    if (rpm < rpm_ramp) {
+        comp *= (rpm / rpm_ramp);
+    }
+
+    // 限幅
+    if (comp > comp_max) comp = comp_max;
+    if (comp < 0.0f)     comp = 0.0f;
+
+    // 一阶平滑
+    static float comp_f = 0.0f;
+    comp_f += lpf_a * (comp - comp_f);
+
+    return sign * comp_f;
 }
+
 
 
 
