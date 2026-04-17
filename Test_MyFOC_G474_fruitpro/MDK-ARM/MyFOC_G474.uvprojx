@@ -880,6 +880,11 @@
               <FilePath>..\MyCode\Observer.c</FilePath>
             </File>
             <File>
+              <FileName>HFI.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\MyCode\HFI.c</FilePath>
+            </File>
+            <File>
               <FileName>Encoder.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\MyCode\Encoder.c</FilePath>

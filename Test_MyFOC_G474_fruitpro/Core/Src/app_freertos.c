@@ -229,17 +229,14 @@ void StartTask_1ms(void *argument)
     
   uint32_t PreviousWakeTime = osKernelGetTickCount(); 
   const uint32_t TimeIncrement = 1; // 1ms 任务周期
-  static uint16_t led_cnt = 0;
     
   /* Infinite loop */
   for(;;)
   {
-      led_cnt++;
-      if (led_cnt >= 1000)
-      {
-          led_cnt = 0;
-          LED0_TOGGLE(); 
-      }
+
+      
+      
+      
       PreviousWakeTime += TimeIncrement;
       osDelayUntil(PreviousWakeTime);
   }

@@ -9,9 +9,8 @@ LPF1_t g_smo_ebeta_lpf  = {0};
 StepMotor Mo            = {0.1175, 0.000181, 0.00f, 0.00f, 0.00f};                           //电阻Rs=0.223025 电感Ls = 0.000444463H
 SlidingModeObserver SMO = {0.93714, 0.5349, 5.0, 0.0001, 0, 0, 0, 0, 0, 0, 0, 0};              //k=0.75-6.25,Ts=0.0001s 
 PLL_Handle PLL          = { 888.4f, 39.49f, 0, 0, 0.0001, 0, 0, 0, 0, 0};                        //Kp=2ζωn=2*0.707*7     Ki = ωn*ωn=7^2
-//88.9f0.395f
-/**************** IF->SMO 结构体****************/
-ThetaBlend_t Blend      = {0.85f, 100, 50000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
+
+ThetaBlend_t Blend      = {0.85f, 100, 20000, 500, 0, 0, BLEND_STATE_IF_ONLY, 0.0f, 0.0f};     //threshold=0.3f rad (~17deg), hold_cnt_max=500, openloop_cnt_min=10000, blend_steps=500
 
 
 

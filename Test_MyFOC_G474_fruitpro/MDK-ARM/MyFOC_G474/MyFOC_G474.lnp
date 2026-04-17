@@ -33,6 +33,7 @@
 "myfoc_g474\system_stm32g4xx.o"
 "myfoc_g474\foc_function.o"
 "myfoc_g474\observer.o"
+"myfoc_g474\hfi.o"
 "myfoc_g474\encoder.o"
 "myfoc_g474\led_key.o"
 "myfoc_g474\lcd_spi.o"
