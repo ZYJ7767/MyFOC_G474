@@ -399,6 +399,11 @@
               <FilePath>../Core/Src/main.c</FilePath>
             </File>
             <File>
+              <FileName>gpio.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/gpio.c</FilePath>
+            </File>
+            <File>
               <FileName>app_freertos.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/app_freertos.c</FilePath>
@@ -453,11 +458,6 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
-            </File>
-            <File>
-              <FileName>gpio.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>../Core/Src/gpio.c</FilePath>
             </File>
             <File>
               <FileName>adc.c</FileName>
@@ -885,6 +885,16 @@
               <FilePath>..\MyCode\HFI.c</FilePath>
             </File>
             <File>
+              <FileName>LCD_SPI.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\MyCode\LCD_SPI.c</FilePath>
+            </File>
+            <File>
+              <FileName>BDC_Ctrl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\MyCode\BDC_Ctrl.c</FilePath>
+            </File>
+            <File>
               <FileName>Encoder.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\MyCode\Encoder.c</FilePath>
@@ -893,11 +903,6 @@
               <FileName>Led_Key.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\MyCode\Led_Key.c</FilePath>
-            </File>
-            <File>
-              <FileName>LCD_SPI.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\MyCode\LCD_SPI.c</FilePath>
             </File>
             <File>
               <FileName>dwt_timer.c</FileName>

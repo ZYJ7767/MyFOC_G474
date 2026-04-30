@@ -79,13 +79,13 @@ uint16_t U_Offset    = 0;           //偏置ADC值
 uint16_t V_Offset    = 0;
 uint16_t W_Offset    = 0;
 
-#define  OC_TRIP_A   18.0f          // 电流保护
+#define  OC_TRIP_A   15.0f          // 电流保护
 volatile uint8_t g_fault_oc = 0;   // 过流闩锁，触发后保持故障态
 
 
 uint8_t key;                        //按键值
 float   my_theta      = 0;          //开环位置
-float   my_step       = 0.010f;     //开环增量
+float   my_step       = 0.000f;     //开环增量
 float   my_add        = 0.0f;
 
 uint16_t EncodeValue    = 0;        //编码器当前值
@@ -101,7 +101,9 @@ float   smo_speed       = 0;        //SMO_RPM
 
 float   smo_err         = 0;        //观测器和实际角度误差
 
-float   final_theta     = 0;        //IF/SMO blend output angle
+float   final_theta     = 0;        //IF/SMO blend output angleref
+
+float   ref             =1.5f;
 
 float    Ud;
 float    Uq;
@@ -115,8 +117,8 @@ float    Ibeta;
 float    Vup        = 0;            //VF开环频率（速度）变量
 float    Uup        = 0;            //VF开环电压变量
 
-float    kp         = 0.2274f;      //电流环PID调试变量 200Hz带宽
-float    ki         = 0.0148f;      //电流环PID调试变量
+float    kp         = 1.03f;        //电流环PID调试变量 带宽800Hz
+float    ki         = 0.11f;        //电流环PID调试变量 
 float    skp        = 0.016f;       //速度环PID调试变量
 float    ski        = 0.00060f;     //速度环PID调试变量
 
@@ -180,6 +182,7 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM7_Init();
   MX_SPI1_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
   DWT_Timer_Init();
   
@@ -210,6 +213,7 @@ int main(void)
   __HAL_TIM_SET_COUNTER(&htim3, 0);                                 //清0计数器
   
   HAL_TIM_Base_Start( &htim1);                                      //TIM1 PWM
+
   HAL_TIM_PWM_Start ( &htim1, TIM_CHANNEL_4);                       //触发通道4这里用的这个事件触发ADC采集
   
   HAL_TIM_PWM_Start( &htim1, TIM_CHANNEL_1);                        //三相PWM通道开启
@@ -217,8 +221,7 @@ int main(void)
   HAL_TIM_PWM_Start( &htim1, TIM_CHANNEL_3);
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_1);                     //三相PWM互补通道开启
   HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_2);  
-  HAL_TIMEx_PWMN_Start( &htim1, TIM_CHANNEL_3); 
-
+ 
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -231,11 +234,13 @@ int main(void)
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -386,7 +391,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
             }
             else if (Speedref > 0.0f && Run_Flag == 0 && g_fault_oc == 0)
             {
-                my_step = 0.010f;             //恢复初始步长
+                my_step = 0.012f;             //恢复初始步长
                 openloop_cnt   = 0;
                 align_cnt      = 0; 
                 smo_settle_cnt = 0;
@@ -411,13 +416,13 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
      }
      if(Run_Flag)
      {
-         float I_ForwardAdd = 5.0f;  //静摩擦补偿前馈量  
+         float I_ForwardAdd =5.0f; //5.0f;  //静摩擦补偿前馈量  
          
          if(align_cnt < 2000)  //0位对齐
          {
                 align_cnt++;
                 my_theta = 0.0f; 
-                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start + I_ForwardAdd , 4.712389f);
+                IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start+ I_ForwardAdd , 4.712389f);//Iqref_start + I_ForwardAdd
          }
          else
          {
@@ -436,6 +441,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)                
                     }
                     
                     // 仍在IF阶段（含CONVERGING/BLENDING）：只跑电流环，给固定Iqref_start
+//                    VF_OpenLoop(&MyFoc, 0, ref ,my_theta);
                     IF_OpenLoop(&MyFoc, &C_PI, IsensU, IsensV, IsensW, Iqref_start + I_ForwardAdd, final_theta);//final_theta
                     openloop_cnt++;
 

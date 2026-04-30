@@ -52,3 +52,5 @@ myfoc_g474\app_freertos.o: ../MyCode/dwt_timer.h
 myfoc_g474\app_freertos.o: ../MyCode/LCD_SPI.h
 myfoc_g474\app_freertos.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 myfoc_g474\app_freertos.o: ../MyCode/Foc_Function.h
+myfoc_g474\app_freertos.o: ../MyCode/BDC_Ctrl.h
+myfoc_g474\app_freertos.o: ../Core/Inc/tim.h

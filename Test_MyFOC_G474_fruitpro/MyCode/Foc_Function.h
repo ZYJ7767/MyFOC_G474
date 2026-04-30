@@ -25,7 +25,7 @@
 #define Pn              4        //极对数
 #define Ld_H            0.000155f   // 先用你现有值
 #define Lq_H            0.000206f   // 先用同值，不确定时先这样
-#define PSI_F           0.007f      // Wb
+#define PSI_F           0.02447     // Wb
 
 
 //结构体

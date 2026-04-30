@@ -84,6 +84,10 @@ void Motor_SoftwareTrip_StopAll(void);
 #define LCD_RST_GPIO_Port GPIOD
 #define LCD_CS_Pin GPIO_PIN_10
 #define LCD_CS_GPIO_Port GPIOD
+#define BDC_shutdown_Pin GPIO_PIN_11
+#define BDC_shutdown_GPIO_Port GPIOD
+#define POSITION_LIMIT_Pin GPIO_PIN_12
+#define POSITION_LIMIT_GPIO_Port GPIOD
 #define PWM_U_Pin GPIO_PIN_8
 #define PWM_U_GPIO_Port GPIOA
 #define PWM_V_Pin GPIO_PIN_9

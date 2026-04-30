@@ -125,19 +125,30 @@ void Svpwm(FOC_TypeDef *Foc)
         case 6:
                 Tm = -Y;
                 Tn = -Z;      
-                break ;    
+                break ;  
+//        default:
+//        Foc->Tcm1 = 0.5f * (float)TS;
+//        Foc->Tcm2 = 0.5f * (float)TS;
+//        Foc->Tcm3 = 0.5f * (float)TS;
+//        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Foc->Tcm1);
+//        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, Foc->Tcm2);
+//        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, Foc->Tcm3);
+//        return;
     }
     
     //过调制
-    if((Tm+Tn)>TS){
-        Tm = (Tm*TS)/(Tm+Tn);
-        Tn = (Tn*TS)/(Tm+Tn);
+    float TmnSun;
+    TmnSun = Tm+Tn;
+    if((Tm+Tn)>TS)
+    {
+        Tm = (Tm*TS)/(TmnSun);
+        Tn = (Tn*TS)/(TmnSun);
     }   
     
     /****************三路PWM占空比计算***************/ 
-    float Ta=(TS-Tm-Tn)/4;
-    float Tb= Ta + Tm/2;
-    float Tc= Tb + Tn/2;
+    float Ta=(TS-Tm-Tn)/2;
+    float Tb= Ta + Tm/1;
+    float Tc= Tb + Tn/1;
     
     switch (N)
     {
@@ -171,6 +182,7 @@ void Svpwm(FOC_TypeDef *Foc)
                 Foc->Tcm2=Tc;
                 Foc->Tcm3=Ta; 
                 break ;
+        
     }
     
     /****************三路PWM占空比输出***************/ 
@@ -284,10 +296,10 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
     PI_ctrl->Id_KI_sum += PI_ctrl->err_Id;
     PI_ctrl->Iq_KI_sum += PI_ctrl->err_Iq;
     
-    if (PI_ctrl->Id_KI_sum > 600)  PI_ctrl->Id_KI_sum =  600;
-    if (PI_ctrl->Id_KI_sum < -600) PI_ctrl->Id_KI_sum = -600;
-    if (PI_ctrl->Iq_KI_sum > 1300)  PI_ctrl->Iq_KI_sum =  1300;
-    if (PI_ctrl->Iq_KI_sum < -1300) PI_ctrl->Iq_KI_sum = -1300;
+    if (PI_ctrl->Id_KI_sum > 50)  PI_ctrl->Id_KI_sum =  50;
+    if (PI_ctrl->Id_KI_sum < -50) PI_ctrl->Id_KI_sum = -50;
+    if (PI_ctrl->Iq_KI_sum > 100)  PI_ctrl->Iq_KI_sum =  100;
+    if (PI_ctrl->Iq_KI_sum < -100) PI_ctrl->Iq_KI_sum = -100;
     
     //3.计算PI输出值，Ud和Uq, 并限幅
     ud_pi =(PI_ctrl->Kp * PI_ctrl->err_Id) + (PI_ctrl->Ki * PI_ctrl->Id_KI_sum);
@@ -295,8 +307,8 @@ void CurrentPI(FOC_TypeDef *Foc , PI_CURRENT_TypeDef *PI_ctrl)
     
     we = Foc->speed * (2.0f * pi / 60.0f) * Pn;
     
-    ud_ff = -we * Lq_H * PI_ctrl->Iq_ref;
-    uq_ff =  we * Ld_H * PI_ctrl->Id_ref + we * PSI_F;
+    ud_ff = 0;//-we * Lq_H * PI_ctrl->Iq_ref;
+    uq_ff = 0;//we * Ld_H * PI_ctrl->Id_ref + we * PSI_F;
     
     float ud_pr = PR_Update(&PR_Id, PI_ctrl->err_Id, we, 0.0001f);
     float uq_pr = PR_Update(&PR_Iq, PI_ctrl->err_Iq, we, 0.0001f);
@@ -323,14 +335,14 @@ void SpeedPI(FOC_TypeDef *Foc, PI_SPEED_TypeDef *PI_ctrl, float *Iqref)
     //2.累计积分，并限幅
     PI_ctrl->speed_KI_sum += PI_ctrl->err_speed;
     
-    if (PI_ctrl->speed_KI_sum >  40000.0f) PI_ctrl->speed_KI_sum =  40000.0f;
-    if (PI_ctrl->speed_KI_sum < -40000.0f) PI_ctrl->speed_KI_sum = -40000.0f;
+    if (PI_ctrl->speed_KI_sum >  20000.0f) PI_ctrl->speed_KI_sum =  20000.0f;
+    if (PI_ctrl->speed_KI_sum < -20000.0f) PI_ctrl->speed_KI_sum = -20000.0f;
     
     //3.计算PI输出值Iqref，作为电流环输入
     Iq_final=(PI_ctrl->Kp * PI_ctrl->err_speed) + (PI_ctrl->Ki * PI_ctrl->speed_KI_sum);
 
     //4.输出限幅
-    if (Iq_final > 23.0f)  Iq_final =  23.0f;
+    if (Iq_final > 18.0f)  Iq_final =  18.0f;
     if (Iq_final < 0.0f)  Iq_final = 0.0f;
     
     (*Iqref) = Iq_final;

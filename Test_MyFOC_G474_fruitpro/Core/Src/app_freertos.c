@@ -31,6 +31,7 @@
 #include "LCD_SPI.h"
 #include <stdio.h>
 #include "Foc_Function.h" 
+#include "BDC_Ctrl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,6 +62,10 @@ extern FOC_TypeDef MyFoc;
 
 uint16_t UI_Buf[144 * 32];
 uint16_t cnt = 0;
+
+volatile uint8_t Target_flg = 0;   // 鐘舵?佹爣蹇楋細0琛ㄧず鍋滄锛?1琛ㄧず姝ｈ浆锛?2琛ㄧず鍙嶈浆
+volatile uint16_t BDC_Speed = 10000;
+volatile uint8_t Limit;
 
 /* USER CODE END Variables */
 /* Definitions for Task_10ms */
@@ -171,16 +176,43 @@ void StartTask_10ms(void *argument)
   uint32_t PreviousWakeTime = osKernelGetTickCount(); 
   const uint32_t TimeIncrement = 10; 
     
+  BDC_Init();               //直流电机初始化 
+  uint8_t last_state = 255; //进给电机初始状态设为不同
+    
   for(;;)
   {
+    /***** MainTask *****/
 
-    /***** 软件触发电源电压采集 *****/
+    if(Target_flg != last_state)
+    {
+          if(Target_flg == 0)
+          {
+              BDC_Stop();
+          }
+          else if(Target_flg == 1)
+          {
+              BDC_Down_drive();
+          }
+          else if(Target_flg == 2)
+          {
+              BDC_Up_drive();
+          }
+          last_state = Target_flg;
+    }
+
+
+    if (Target_flg != 0) 
+    {
+          BDC_SetSpeed(BDC_Speed);
+    }
+
+    /***** Vbus ADC  *****/
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, 5); 
     ADC_Vbus   = HAL_ADC_GetValue(&hadc1);
     Vbus = (float)ADC_Vbus * 0.0176757477f;
-      
-    /****** KEY_LED 模块 ******/
+
+    /****** KEY_LED  ******/
     key = key_scan(0);
     if (key)
     {
@@ -225,20 +257,24 @@ void StartTask_10ms(void *argument)
 void StartTask_1ms(void *argument)
 {
   /* USER CODE BEGIN StartTask_1ms */
-
     
   uint32_t PreviousWakeTime = osKernelGetTickCount(); 
-  const uint32_t TimeIncrement = 1; // 1ms 任务周期
+  const uint32_t TimeIncrement = 1; 
     
   /* Infinite loop */
   for(;;)
   {
-
-      
-      
-      
-      PreviousWakeTime += TimeIncrement;
-      osDelayUntil(PreviousWakeTime);
+    Limit = HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12);
+    if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_SET) 
+    {
+            if (Target_flg == 2) // 假设 Target_flg == 2 是朝这个传感器的方向运动
+            {
+                Target_flg = 0;  // 强制停车，防止撞坏
+            }
+    }
+    
+    PreviousWakeTime += TimeIncrement;
+    osDelayUntil(PreviousWakeTime);
   }
   /* USER CODE END StartTask_1ms */
 }
@@ -276,12 +312,12 @@ void StartTask_500ms(void *argument)
   for(;;)
   {
         //DWT_Timer_Start(&t);
-        // 刷新目标速度
+        // Speedref
         sprintf(str_buf, "%8.1f", Speedref);
         LCD_Draw_String_To_Buffer_X2(str_buf, UI_Buf, 128, 32, LCD_WHITE, LCD_BLACK);
         LCD_Fill_DMA(90, 20, 90 + 128 - 1, 20 + 32 - 1, UI_Buf);
 
-        // 刷新当前速度 (Y 坐标由于行高，从 50 被推迟到 60 或者 70 左右最佳)
+        // speed
         sprintf(str_buf, "%8.1f", MyFoc.speed);
         LCD_Draw_String_To_Buffer_X2(str_buf, UI_Buf, 128, 32, LCD_GREEN, LCD_BLACK);
         LCD_Fill_DMA(90, 70, 90 + 128 - 1, 70 + 32 - 1, UI_Buf);
